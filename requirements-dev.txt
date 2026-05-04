@@ -1,0 +1,17 @@
+# =============================================================================
+# Development dependencies
+# =============================================================================
+# 설치: pip install -r requirements-dev.txt
+# 또는: make setup  (requirements.txt + requirements-dev.txt 한번에 + pre-commit 설치)
+
+# 코드 품질
+ruff==0.7.3
+mypy==1.13.0
+pre-commit==4.0.1
+
+# 테스트
+pytest==8.3.3
+pytest-cov
+
+# 노트북 위생 (출력 자동 정리)
+nbstripout

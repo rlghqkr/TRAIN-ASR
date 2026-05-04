@@ -1,0 +1,31 @@
+# =============================================================================
+# Example experiment configuration
+# =============================================================================
+# 사용법:
+#   python scripts/train.py --config configs/default.yaml
+#
+# 새 실험은 이 파일을 복사 → configs/<exp_name>.yaml 로 저장.
+# 키 구조는 자유. 아래는 단순 예시이며, 프로젝트에 맞게 자유롭게 변경하세요.
+
+experiment:
+  name: default
+  seed: 42
+
+# 프로젝트별로 필요한 키들을 자유롭게 추가:
+# data:
+#   ...
+# model:
+#   ...
+# training:
+#   epochs: 10
+#   learning_rate: 1.0e-3
+
+# -----------------------------------------------------------------------------
+# Weights & Biases (사용 시)
+# -----------------------------------------------------------------------------
+wandb:
+  enabled: true
+  project: my-project   # ← W&B 프로젝트 이름으로 변경
+  entity: null          # 회사/개인 W&B entity
+  tags: []
+  notes: ""
