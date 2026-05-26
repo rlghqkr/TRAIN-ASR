@@ -7,10 +7,15 @@
 
 ## 1. 프로젝트 소개
 
-<!-- TODO: 새 프로젝트 시작 시 채우세요 -->
-- **이름**: (프로젝트 이름)
-- **목적**: (한 줄 요약)
-- **연구 영역**: (예: 음성 인식, 화자 분리 등)
+- **이름**: TRAIN-ASR (+ BENCHMARK 하위 프로젝트)
+- **목적**: 한국어 음성인식 모델(Whisper, SenseVoice 등) 학습 + 도메인·화자별
+  벤치마크 평가
+- **연구 영역**: 한국어 음성인식 (ASR)
+- **메트릭**: CER (Character Error Rate) 우선, WER 보조
+- **데이터 단계**: RAW → SILVER → GOLD (자세한 정책은 [GUIDELINE/04-data.md](GUIDELINE/04-data.md))
+- **평가 단위**: 도메인(카페주문 / 콜센터 …) + 화자군(노인 / 어린이 …) + 환경(잡음 / 사투리 …) 별 벤치마크
+- **문서 인덱스**: [GUIDELINE/README.md](GUIDELINE/README.md)
+- **인턴 학습 자료**: [GUIDELINE/benchmark-and-training-guide.md](GUIDELINE/benchmark-and-training-guide.md)
 
 ---
 

@@ -16,6 +16,7 @@ help:
 	@echo "  test        - pytest 실행"
 	@echo "  typecheck   - mypy 타입 검사"
 	@echo "  train       - 학습 실행 (CFG=configs/default.yaml)"
+	@echo "  docs-study  - docs/study/index.html (단일 인터랙티브 HTML) 재빌드"
 	@echo "  clean       - 캐시/임시 파일 제거"
 
 # -----------------------------------------------------------------------------
@@ -58,6 +59,12 @@ CFG ?= configs/default.yaml
 
 train:
 	python scripts/train.py --config $(CFG)
+
+# -----------------------------------------------------------------------------
+# Docs
+# -----------------------------------------------------------------------------
+docs-study:
+	python scripts/build_study_html.py
 
 # -----------------------------------------------------------------------------
 # Clean

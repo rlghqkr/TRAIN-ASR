@@ -1,31 +1,84 @@
-# =============================================================================
-# Example experiment configuration
-# =============================================================================
-# 사용법:
-#   python scripts/train.py --config configs/default.yaml
-#
-# 새 실험은 이 파일을 복사 → configs/<exp_name>.yaml 로 저장.
-# 키 구조는 자유. 아래는 단순 예시이며, 프로젝트에 맞게 자유롭게 변경하세요.
-
+# 실험 식별
 experiment:
-  name: default
-  seed: 42
+  name: default                  # 출력 폴더 이름. outputs/<name>/ 에 학습 산출물 저장.
+  seed: 42                       # 재현성. seed_everything(seed) 로 모든 무작위성 고정.
 
-# 프로젝트별로 필요한 키들을 자유롭게 추가:
-# data:
-#   ...
-# model:
-#   ...
-# training:
-#   epochs: 10
-#   learning_rate: 1.0e-3
+# 데이터·모델·산출물 경로. 모든 절대 경로는 여기서만 관리한다 (코드에 박지 않음).
+paths:
+  repo_root:           /home/cssong/workspace/TRAIN-ASR
 
-# -----------------------------------------------------------------------------
-# Weights & Biases (사용 시)
-# -----------------------------------------------------------------------------
+  # 학습 데이터 (data/)
+  data_root:           ${paths.repo_root}/data
+  raw_dir:             ${paths.data_root}/RAW                          # 외부 출처에서 받은 원본 (읽기 전용)
+  silver_dir:          ${paths.data_root}/SILVER                       # 자동/반자동 라벨링 중간물
+  gold_dir:            ${paths.data_root}/GOLD                         # 학습/검증 최종 JSONL
+  train_jsonl:         ${paths.gold_dir}/train.jsonl                   # 학습용 (Sample 스키마 — project/data/schema.py)
+  val_jsonl:           ${paths.gold_dir}/val.jsonl                     # 학습 중 모니터링용 (작은 분량)
+  corpora_meta_xlsx:   ${paths.data_root}/Corpora_Meta_Table.xlsx      # 코퍼스 메타시트 (RAW_통합 시트)
+
+  # 벤치마크 (BENCHMARK/) — 평가 전용. 학습 데이터와 분리.
+  benchmark_root:      ${paths.repo_root}/BENCHMARK
+  benchmark_silver_dir: ${paths.benchmark_root}/SILVER                 # 벤치마크용 16kHz wav
+  benchmark_gold_dir:  ${paths.benchmark_root}/GOLD                    # 벤치마크 JSONL 모음
+  test_dir:            ${paths.benchmark_gold_dir}/test                # 벤치마크별 *.jsonl (1파일 = 1평가셋)
+  benchmark_meta_xlsx: ${paths.benchmark_root}/Benchmark_Meta_Table.xlsx
+  eval_results_dir:    ${paths.benchmark_root}/results                 # 평가 산출물 (report.txt/.json/.diff)
+
+  # 학습 산출물
+  outputs_dir:         ${paths.repo_root}/outputs                      # model.pt / config.yaml / train.log
+
+# 모델 백본 — 로컬 경로 또는 HuggingFace ID
+models:
+  sensevoice:
+    backbone: /home/cssong/workspace/data/FM/MODEL/SenseVoiceSmall
+    trust_remote_code: true      # FunASR 가 백본 폴더 안의 .py 코드를 신뢰하고 실행
+  whisper:
+    backbone: openai/whisper-small   # HuggingFace ID. tiny/base/small/medium/large-v3 선택 가능.
+    language: ko                 # 강제 디코더 언어 토큰 (`<|ko|>`)
+    task: transcribe             # transcribe (그대로) | translate (영어로 번역)
+
+# 학습/평가 공통 데이터 옵션
+data:
+  text_field:     text_normalized   # text | text_normalized — 평가와 일관되게 *_normalized 권장
+  sample_rate:    16000             # 16kHz mono. SILVER 단계에서 통일된 표준.
+  max_audio_sec:  30                # 30초 초과 발화는 모델 입력 한계로 제외
+  max_label_len:  200               # 텍스트 토큰 최대 길이
+  num_workers:    4                 # DataLoader 워커 수. CPU 코어 수 / 메모리 봐서 조정.
+
+# 학습 하이퍼파라미터
+training:
+  epochs: 5
+  batch_size: 8                     # GPU 메모리에 맞춰 조정. SenseVoice 는 토큰 단위 동적 배칭 (사이즈 의미 다름).
+  grad_accum_steps: 4               # effective batch = batch_size × grad_accum_steps × num_gpus
+  lr: 1.0e-5                        # 파인튜닝 적정 범위 1e-6 ~ 5e-5. 큰 LR 은 사전학습 능력 손상 (catastrophic forgetting).
+  warmup_steps: 500                 # 초반 LR 0 → 목표 LR 까지 선형 증가. 초기 학습 안정화.
+  weight_decay: 0.01                # AdamW 정규화 강도
+  scheduler: cosine                 # cosine | linear | constant
+  precision: bf16                   # fp32 | fp16 | bf16. A100/H100 → bf16 안전, V100/RTX → fp16.
+  grad_clip: 1.0                    # gradient norm 클리핑. NaN 발산 방지.
+  log_every: 25                     # 매 N step 마다 loss / lr / grad_norm 로그
+  eval_every: 1000                  # 매 N step 마다 val 평가
+  save_every: 1000                  # 매 N step 마다 체크포인트 저장
+  early_stopping_patience: 3        # val 개선 없는 평가 N 회 연속이면 학습 중단
+
+# 평가
+eval:
+  metric: cer                       # 한국어 표준 (Character Error Rate, 낮을수록 좋음)
+  secondary: [scer]                 # 보조 메트릭. scer = 공백 무시 CER. wer 도 추가 가능.
+  beam_size: 5                      # 1 = greedy (빠름) / 5 = 표준 / 10+ = 더 정확하지만 느림
+  batch_size: 16                    # 추론 배치 크기
+  benchmarks: all                   # all | [<benchmark_id>, ...] — BENCHMARK/GOLD/test/ 안의 파일명
+
+# Weights & Biases — 실험 추적
 wandb:
-  enabled: true
-  project: my-project   # ← W&B 프로젝트 이름으로 변경
-  entity: null          # 회사/개인 W&B entity
-  tags: []
-  notes: ""
+  enabled: true                     # false 면 wandb 호출 모두 no-op
+  project: train-asr                # W&B 프로젝트 이름
+  entity: null                      # null = 본인 기본 entity. 팀 entity 가 있으면 명시.
+  group: null                       # sensevoice | whisper — 모델별 그룹으로 W&B UI 에서 분류
+  tags: []                          # 자유 태그 (예: [baseline, lr_sweep])
+  notes: ""                         # 이번 실험에서 무엇을, 왜 바꿨는지 한 문장
+
+# 런타임 환경
+runtime:
+  cuda_visible_devices: "2"         # 쉼표 구분 GPU 인덱스 (예: "0" / "0,1" / "0,1,2,3")
+  conda_env: train-asr-sv           # 활성화된 conda 환경 이름
