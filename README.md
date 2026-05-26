@@ -15,17 +15,15 @@
 
 ---
 
-## 어디부터 읽을까?
+## 문서 인덱스
 
-| 누구 | 시작점 |
+| 무엇 | 어디 |
 |---|---|
-| **이 저장소 처음** | [GUIDELINE/README.md](GUIDELINE/README.md) — 작업 매뉴얼 인덱스 |
-| **인턴 / 신규 합류자** | [GUIDELINE/benchmark-and-training-guide.md](GUIDELINE/benchmark-and-training-guide.md) — Phase 1 (벤치마크 구축) / Phase 2 (모델 학습) 단계별 가이드 |
-| **학습 실험 하고 싶음** | [GUIDELINE/02-training.md](GUIDELINE/02-training.md) |
-| **평가 / 벤치마크** | [GUIDELINE/03-benchmark.md](GUIDELINE/03-benchmark.md) |
-| **데이터 정책 (RAW/SILVER/GOLD)** | [GUIDELINE/04-data.md](GUIDELINE/04-data.md) |
-| **커밋·코딩 컨벤션** | [GUIDELINE/05-conventions.md](GUIDELINE/05-conventions.md) |
-| **AI 어시스턴트 운영 규칙** | [CLAUDE.md](CLAUDE.md) |
+| GUIDELINE 인덱스 (큰 그림 + 공유 경로) | [GUIDELINE/README.md](GUIDELINE/README.md) |
+| **1단계 — 벤치마크 구축 + 백본 평가** | [GUIDELINE/1_벤치마크구축.md](GUIDELINE/1_벤치마크구축.md) |
+| 2단계 — 모델 학습 (TBD) | [GUIDELINE/2_모델학습.md](GUIDELINE/2_모델학습.md) |
+| 스키마 정의 (발화 JSONL · 평가 yaml · 코퍼스 메타) | [GUIDELINE/스키마.md](GUIDELINE/스키마.md) |
+| AI 어시스턴트 운영 규칙 | [CLAUDE.md](CLAUDE.md) |
 
 ---
 
@@ -128,10 +126,7 @@ cp .env.example .env
 python scripts/train.py --config configs/default.yaml
 ```
 
-모델별 학습 가이드:
-
-- 공통 학습 절차: [GUIDELINE/02-training.md](GUIDELINE/02-training.md)
-- 모델별 실행 예시: [GUIDELINE/benchmark-and-training-guide.md](GUIDELINE/benchmark-and-training-guide.md) §6 (Phase 2)
+모델 학습 가이드: [GUIDELINE/2_모델학습.md](GUIDELINE/2_모델학습.md) (TBD — 1단계 완료 후 정식 작성)
 
 ### 7. 평가 실행
 
@@ -142,7 +137,7 @@ bash BENCHMARK/scripts/evaluate_all.sh \
     BENCHMARK/results/<exp>/
 ```
 
-자세한 사용법: [GUIDELINE/03-benchmark.md](GUIDELINE/03-benchmark.md)
+자세한 사용법: [GUIDELINE/1_벤치마크구축.md](GUIDELINE/1_벤치마크구축.md)
 
 ---
 
@@ -208,10 +203,10 @@ make clean       # 캐시 제거
 
 ## 기여 (Contributing)
 
-1. **새 실험**: [GUIDELINE/02-training.md](GUIDELINE/02-training.md)
-2. **새 벤치마크**: [GUIDELINE/03-benchmark.md](GUIDELINE/03-benchmark.md)
-3. **문제 발생**: [GUIDELINE/02-training.md](GUIDELINE/02-training.md) (트러블슈팅 섹션)
-4. **코딩 규칙**: [GUIDELINE/05-conventions.md](GUIDELINE/05-conventions.md) · [CLAUDE.md](CLAUDE.md)
+1. **새 벤치마크**: [GUIDELINE/1_벤치마크구축.md](GUIDELINE/1_벤치마크구축.md)
+2. **새 학습 실험**: [GUIDELINE/2_모델학습.md](GUIDELINE/2_모델학습.md) (TBD)
+3. **스키마 / 포맷**: [GUIDELINE/스키마.md](GUIDELINE/스키마.md)
+4. **코딩 규칙**: [CLAUDE.md](CLAUDE.md)
 
 PR 작성 시:
 
