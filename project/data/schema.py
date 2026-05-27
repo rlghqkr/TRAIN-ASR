@@ -52,7 +52,7 @@ class Sample:
 
     # ── 필수 (7개) ─────────────────────────────────────────────
     key: str                    # 전 데이터셋 고유 ID
-    audio: str                  # 절대 경로
+    audio: str                  # JSONL 기준 상대경로 (load_samples 가 resolve)
     duration_sec: float         # 16kHz 기준 실 길이
     text: str                   # 원시 전사
     text_normalized: str        # 정규화 거친 텍스트 (평가 비교용)
@@ -131,10 +131,10 @@ def _validate_one(d: dict[str, Any], *, line_no: int, for_test: bool) -> Sample:
             f"[line {line_no}] 필수 필드 누락: {missing}"
         )
 
-    # audio 가 절대 경로인지
-    if not str(d["audio"]).startswith("/"):
+    # audio 경로가 비어 있는지
+    if not str(d["audio"]).strip():
         raise SchemaValidationError(
-            f"[line {line_no}] audio 는 절대 경로여야 함: {d['audio']!r}"
+            f"[line {line_no}] audio 경로가 비어 있음"
         )
 
     # duration 범위
@@ -237,7 +237,8 @@ def load_samples(path: str | Path, *, validate: bool = True,
         Sample 리스트.
     """
 
-    p = Path(path)
+    p = Path(path).resolve()
+    jsonl_dir = p.parent
     if for_test is None:
         for_test = "/test/" in str(p).replace("\\", "/")
 
@@ -253,6 +254,12 @@ def load_samples(path: str | Path, *, validate: bool = True,
                 raise SchemaValidationError(
                     f"[{p}:{i}] JSON 파싱 실패: {e.msg}"
                 ) from e
+
+    # 상대경로 → JSONL 위치 기준 절대경로로 resolve
+    for d in raw:
+        audio = str(d.get("audio", ""))
+        if audio and not Path(audio).is_absolute():
+            d["audio"] = str((jsonl_dir / audio).resolve())
 
     if not validate:
         return [Sample.from_dict(d) for d in raw]
