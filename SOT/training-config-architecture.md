@@ -1,6 +1,7 @@
 # 학습/평가 Config 아키텍처 (SOT)
 
 > 최종 확정: 2026-06-16. 코드 전수 추적으로 검증됨.
+> 2026-06-22 개정: 스키마 리뉴얼(`text_norm` 등) + 런처(`scripts/train.sh`/`eval.sh`) + 평가 CLI(`scripts/eval.py`) 반영.
 > 충돌 시 이 문서가 기준. (구버전 `docs/training/configs.md` 는 현행 코드와 불일치 — 참고 금지)
 
 ---
@@ -49,7 +50,7 @@ models:
   sensevoice: {backbone, trust_remote_code}
 
 data:
-  text_field:      # text | text_normalized
+  text_field:      # text | text_norm  (학습 타겟; 평가와 일관되게 text_norm 권장)
   sample_rate:     # 16000
   max_label_len:   # 토큰 최대 길이
   num_workers:     # DataLoader 워커
@@ -81,8 +82,9 @@ runtime:           # cuda_visible_devices, conda_env
 - `data.max_audio_sec` — 코드 사용처 0
 - `eval.*` 섹션 전체 — 평가는 BENCHMARK 소유
 
-> 주의: `runtime.conda_env` 는 코드가 읽지 않는 **사람용 메모**다 (어느 env 를
-> activate 할지 안내). 값이 틀려도 학습엔 영향 없음.
+> `runtime.conda_env` / `runtime.cuda_visible_devices` 는 **런처 `scripts/train.sh`·`scripts/eval.sh`
+> 가 읽어** 해당 conda env + GPU 로 실행한다. (python 진입점 `scripts/train.py` 자체는 자기
+> conda env 를 못 바꾸므로 런처가 담당. 직접 python 실행 시엔 셸에서 activate/`CUDA_VISIBLE_DEVICES` 지정.)
 
 ---
 
@@ -95,12 +97,13 @@ recognizer:
   model_path:  # 백본 또는 학습 체크포인트 폴더 (= outputs/<exp>/)
   backbone:    # (whisper) processor 로드용
   options:     # build_predict_fn 키워드 인자 (language, task, beam_size, device …)
-benchmarks:    # [<bench_id>, ...] → BENCHMARK/<bench_id>/samples.jsonl 자동 lookup
+benchmarks:    # [<bench_id>, ...] → <bench_root>/<bench_id>/transcript.jsonl 자동 lookup
 batch_size:
 ```
 
 - `benchmarks` 는 **경로가 아니라 ID 리스트** (ID 기반 자동 lookup).
-- 읽는 곳: `notebooks/00_build_benchmark.ipynb`, `BENCHMARK/README.md §3`.
+- 읽는 곳: `scripts/eval.py`(CLI 진입점, `scripts/eval.sh` 가 호출), `notebooks/12_eval.ipynb`.
+- ID → `transcript.jsonl` 경로 해석: `--stage gold|silver`(기본 gold) 또는 `--bench-root` 로.
 
 ---
 
@@ -108,9 +111,11 @@ batch_size:
 
 - **학습셋**: `paths.train_jsonl` / `val_jsonl` 에 직접 지정. GOLD 든 SILVER 든
   사용자가 가리키는 경로를 그대로 읽는다 (GOLD 전용 강제 없음).
-- **평가셋**: `BENCHMARK/<bench_id>/samples.jsonl` (Sample 스키마).
-  `BENCHMARK/data/<name>` 은 외부 스토리지(`/data/ASR/BENCHMARK/SILVER/...`)로의
-  **심볼릭 링크**이며 `.gitignore` 됨 (`BENCHMARK/data/`).
+- **평가셋**: `<bench_root>/<bench_id>/transcript.jsonl` (Sample 스키마).
+  - 기본 `bench_root` = `/data/ASR/BENCHMARK/<STAGE>` (STAGE = `gold`(기본) | `silver`).
+    GOLD 는 SILVER 에서 샘플링한 부분집합.
+  - `BENCHMARK/data/<bench_id>` 는 `/data/ASR/BENCHMARK/SILVER/<bench_id>/` 로의
+    **심볼릭 링크**(+ 커밋된 로컬 샘플 `Sample10_PracticeRef`). `BENCHMARK/data/` 는 `.gitignore`.
 - 사용자 홈 절대경로(`/home/<user>/...`)를 **코드에 박지 않는다**. 경로는 config 로 뺀다.
 
 ---
@@ -119,23 +124,34 @@ batch_size:
 
 - conda env: **`train-asr`** (Whisper·SenseVoice 공용 단일 환경).
   `configs/default.yaml` 의 `runtime.conda_env` 메모도 이 값.
-- Whisper 학습 deps: `transformers, accelerate, datasets, soundfile` (+ torch).
-  CER 은 자체 normalize 라 jiwer 불필요.
+- Whisper 학습 deps: `transformers, accelerate, datasets, soundfile, jiwer` (+ torch).
+  학습 중 eval 스텝마다 CER 을 계산하므로 **jiwer 필요** (`project.evaluation.compute_cer`).
 - SenseVoice 학습 deps: `funasr` (torchrun 외부 실행).
+- 로깅: `wandb` (`wandb.enabled: true` 일 때만 필요. `false` 면 no-op).
 
 ---
 
-## 6. 학습 실행 (요약)
+## 6. 학습 / 평가 실행 (요약)
+
+런처가 config 의 `runtime`(conda_env/GPU)을 읽어 실행한다.
 
 ```bash
-# Whisper — HF Trainer 바로 학습
-CUDA_VISIBLE_DEVICES=2 python scripts/train.py \
-    --config configs/default.yaml --model whisper
+# 학습 — Whisper (HF Trainer 바로 학습)
+scripts/train.sh configs/default.yaml whisper
 
-# SenseVoice — torchrun 명령만 출력 → 별도 tmux 에서 실행
-python scripts/train.py --config configs/default.yaml --model sensevoice
+# 학습 — SenseVoice (torchrun 명령만 출력 → 별도 tmux 에서 실행)
+scripts/train.sh configs/default.yaml sensevoice
+
+# 학습 후 자동 평가 (opt-in): outputs/<exp> 를 그 평가 yaml 로 평가
+EVAL_CONFIG=BENCHMARK/configs/eval/whisper_baseline.yaml \
+    scripts/train.sh configs/default.yaml whisper
+
+# 평가만 — 기본 GOLD (가끔 --stage silver)
+scripts/eval.sh BENCHMARK/configs/eval/whisper_baseline.yaml
 ```
 
-- 로직 SoT 는 `project/training/run.py`. CLI 도 노트북도 이 함수를 호출만 한다.
-- 노트북 `notebooks/11_train_whisper.ipynb` 는 **학습까지**만 담당 (평가 셀 없음).
+- 학습 로직 SoT = `project/training/run.py`, 평가 진입점 = `scripts/eval.py`
+  (`project.evaluation.evaluate_on_benchmark_suite`). CLI·노트북 모두 이들을 호출만 한다.
+- 노트북: 학습 `notebooks/11_train_whisper.ipynb`, 평가 `notebooks/12_eval.ipynb`.
 - 선결 조건: `paths.train_jsonl` / `val_jsonl` 가 실제로 존재해야 함.
+- 직접 python 실행: `CUDA_VISIBLE_DEVICES=N python scripts/train.py --config ... --model whisper`.
