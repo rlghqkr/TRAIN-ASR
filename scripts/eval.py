@@ -55,6 +55,8 @@ def parse_args() -> argparse.Namespace:
                    help="recognizer.model_path 덮어쓰기 (학습 직후 outputs/<exp> 지정용)")
     p.add_argument("--name", default=None,
                    help="recognizer.name 덮어쓰기 (results/<name> 폴더)")
+    p.add_argument("--no-timestamp", action="store_true",
+                   help="결과 폴더명에 타임스탬프(__YYMMDD_HHMMSS) 안 붙임 (기본은 붙여 매 실행 따로 쌓음)")
     return p.parse_args()
 
 
@@ -106,6 +108,9 @@ def main() -> None:
         recognizer["name"] = args.name
 
     name = recognizer["name"]
+    if not args.no_timestamp:
+        import datetime
+        name = f"{name}__{datetime.datetime.now().strftime('%y%m%d_%H%M%S')}"
     bench_ids = args.benchmarks if args.benchmarks else cfg["benchmarks"]
     batch_size = cfg.get("batch_size", 16)
 
