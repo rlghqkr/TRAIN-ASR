@@ -1,7 +1,7 @@
 """GOLD Sample → Whisper (HuggingFace) Dataset.
 
 학습/평가 양쪽에서 사용. 핵심 변환:
-    {audio: '/abs/.../wav', text_normalized: '...'}  →
+    {audio: '/abs/.../wav', text_norm: '...'}  →
     {input_features: [...], labels: [token_ids]}
 """
 
@@ -43,7 +43,7 @@ def to_whisper_dataset(
     backbone: str = "openai/whisper-small",
     language: str = "ko",
     task: str = "transcribe",
-    text_field: str = "text_normalized",
+    text_field: str = "text_norm",
     sampling_rate: int = 16000,
     cache_dir: str | Path | None = None,
 ):
@@ -53,7 +53,7 @@ def to_whisper_dataset(
         samples: GOLD Sample 리스트.
         backbone: Whisper 백본 (HF ID or 로컬 경로).
         language / task: forced decoder language / task.
-        text_field: 'text' 또는 'text_normalized'.
+        text_field: 'text' 또는 'text_norm'.
         sampling_rate: 16000 권장.
 
     Returns:
@@ -81,7 +81,7 @@ def to_whisper_dataset(
                 raise ValueError(
                     f"sample_rate mismatch: {s.audio} = {sr}, expected {sampling_rate}"
                 )
-            text = s.text_normalized if text_field == "text_normalized" else s.text
+            text = s.text_norm if text_field == "text_norm" else s.text
             features = feature_extractor(
                 audio, sampling_rate=sampling_rate, return_tensors="np",
             ).input_features[0]

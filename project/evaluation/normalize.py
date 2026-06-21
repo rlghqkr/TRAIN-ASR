@@ -1,9 +1,8 @@
 """한국어 ASR 전사 정규화 — 한 곳에서 관리되는 규칙.
 
-이 함수는 *세 곳* 에서 동일하게 호출된다:
-1. SILVER 빌드 시 text_normalized 채우기
-2. GOLD 빌드 시 text_normalized 채우기
-3. 평가 시 reference / hypothesis 양쪽 모두
+이 함수는 *두 곳* 에서 동일하게 호출된다:
+1. 데이터 빌드 시 text_norm 채우기
+2. 평가 시 reference / hypothesis 양쪽 모두
 
 규칙 변경은 **모든 모델의 CER 을 변동시킨다**. PR + 영향 분석 필수.
 

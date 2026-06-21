@@ -39,7 +39,7 @@ def evaluate_on_benchmark_suite(
     predict_fn: Callable[[list[str]], list[str]],
     benchmark_paths: dict[str, str | Path],
     out_dir: str | Path,
-    slice_fields: tuple[str, ...] = ("age_group", "gender", "corpus_id"),
+    slice_fields: tuple[str, ...] = ("age", "gender"),
     batch_size: int = 16,
     save_diff: bool = True,
 ) -> dict[str, CerResult]:
@@ -71,7 +71,7 @@ def evaluate_on_benchmark_suite(
     for bench_id, bench_path in benchmark_paths.items():
         samples = load_samples(bench_path)
         audios = [s.audio for s in samples]
-        refs = [s.text_normalized for s in samples]
+        refs = [s.text_norm for s in samples]
 
         # 배치 추론
         preds: list[str] = []
