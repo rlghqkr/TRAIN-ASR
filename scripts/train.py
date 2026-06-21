@@ -1,9 +1,14 @@
-"""학습 진입점 보일러플레이트.
+"""학습 진입점 (CLI).
 
-설정·시드·W&B 연결 흐름의 예시입니다. 실제 학습 로직은 프로젝트에 맞게 채우세요.
+config·시드 셋업 후 모델별 학습으로 디스패치한다. 실제 학습 로직은
+project/training/run.py 에 있고, 노트북도 같은 함수를 호출한다(SoT).
 
 사용법:
-    python scripts/train.py --config configs/default.yaml
+    # Whisper — HF Trainer 로 바로 학습
+    python scripts/train.py --config configs/default.yaml --model whisper
+
+    # SenseVoice — torchrun 셸 명령만 출력 (별도 tmux 에서 실행)
+    python scripts/train.py --config configs/default.yaml --model sensevoice
 """
 
 import argparse
@@ -18,7 +23,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from project.utils import load_config, seed_everything  # noqa: E402
-from project.utils.wandb_utils import finish_wandb, init_wandb  # noqa: E402
 
 
 logger = structlog.get_logger()
@@ -33,10 +37,17 @@ def parse_args() -> argparse.Namespace:
         help="Path to YAML config file (e.g. configs/default.yaml)",
     )
     parser.add_argument(
+        "--model",
+        type=str,
+        required=True,
+        choices=["whisper", "sensevoice"],
+        help="학습할 모델 종류 (명시 필수).",
+    )
+    parser.add_argument(
         "--run-name",
         type=str,
         default=None,
-        help="Optional W&B run name. If omitted, wandb auto-generates one.",
+        help="Optional W&B run name. If omitted, experiment.name 을 사용.",
     )
     return parser.parse_args()
 
@@ -47,6 +58,7 @@ def main() -> None:
 
     log = logger.bind(
         experiment=config["experiment"]["name"],
+        model=args.model,
         config_path=args.config,
     )
     log.info("Loaded config")
@@ -54,20 +66,28 @@ def main() -> None:
     seed_everything(config["experiment"]["seed"])
     log.info("Seed set", seed=config["experiment"]["seed"])
 
-    run = init_wandb(config, run_name=args.run_name)
-
     try:
-        # ---------------------------------------------------------------------
-        # TODO: 학습 로직을 채워 넣으세요.
-        # ---------------------------------------------------------------------
-        log.info("Training loop placeholder — implement here")
+        if args.model == "whisper":
+            # Whisper: HF Trainer 가 W&B 까지 직접 다룬다 (report_to=wandb).
+            from project.training.run import run_whisper_training
+
+            result = run_whisper_training(config, run_name=args.run_name)
+            log.info("Whisper training done", output_dir=result["output_dir"])
+
+        elif args.model == "sensevoice":
+            # SenseVoice: torchrun 외부 프로세스라 여기선 명령만 출력.
+            from project.training.sensevoice import (
+                build_torchrun_command,
+                print_command,
+            )
+
+            cmd = build_torchrun_command(config)
+            print_command(cmd)
+            log.info("SenseVoice 는 위 torchrun 명령을 tmux 에서 직접 실행하세요")
 
     except Exception as e:
         log.error("Training failed", error_type=type(e).__name__, error_message=str(e))
         raise
-    finally:
-        finish_wandb(run)
-        log.info("Training finished")
 
 
 if __name__ == "__main__":

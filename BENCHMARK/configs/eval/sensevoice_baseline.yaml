@@ -13,7 +13,7 @@ recognizer:
   options:                           # project.data.adapters.sensevoice.build_predict_fn 키워드 인자
     device: cuda:0
 
-benchmarks:                          # BENCHMARK/<bench_id>/samples.jsonl 자동 lookup
+benchmarks:                          # BENCHMARK/data/<bench_id>/transcript.jsonl 자동 lookup
   - Sample10_PracticeRef
 
 batch_size: 16                       # evaluate_on_benchmark_suite 의 배치

@@ -9,8 +9,8 @@ paths:
 
   # 학습/검증 JSONL (Sample 스키마 — project/data/schema.py).
   # silver/gold 어디든 직접 지정 가능. 예: ${paths.repo_root}/data/SILVER/....
-  train_jsonl:         ${paths.repo_root}/data/GOLD/train.jsonl        # 학습용
-  val_jsonl:           ${paths.repo_root}/data/GOLD/val.jsonl          # 학습 중 모니터링용 (작은 분량)
+  train_jsonl:         ${paths.repo_root}/data/SILVER/train.jsonl      # 학습용
+  val_jsonl:           ${paths.repo_root}/data/SILVER/val.jsonl        # 학습 중 모니터링용 (작은 분량)
 
   # 학습 산출물
   outputs_dir:         ${paths.repo_root}/outputs                      # model / config.yaml / train.log
@@ -21,13 +21,14 @@ models:
     backbone: /home/cssong/workspace/data/FM/MODEL/SenseVoiceSmall
     trust_remote_code: true      # FunASR 가 백본 폴더 안의 .py 코드를 신뢰하고 실행
   whisper:
-    backbone: openai/whisper-small   # HuggingFace ID. tiny/base/small/medium/large-v3 선택 가능.
+    backbone: /data/FM/MODEL/whisper/whisper-small   # 로컬 경로. tiny/base/small/medium/large-v3 중 선택 (/data/FM/MODEL/whisper/).
+
     language: ko                 # 강제 디코더 언어 토큰 (`<|ko|>`)
     task: transcribe             # transcribe (그대로) | translate (영어로 번역)
 
 # 학습/평가 공통 데이터 옵션
 data:
-  text_field:     text_normalized   # text | text_normalized — 평가와 일관되게 *_normalized 권장
+  text_field:     text_norm         # text | text_norm — 평가와 일관되게 text_norm 권장
   sample_rate:    16000             # 16kHz mono. SILVER 단계에서 통일된 표준.
   max_label_len:  200               # 텍스트 토큰 최대 길이
   num_workers:    4                 # DataLoader 워커 수. CPU 코어 수 / 메모리 봐서 조정.

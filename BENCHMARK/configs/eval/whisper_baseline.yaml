@@ -10,8 +10,8 @@
 recognizer:
   name: whisper_small_baseline       # results/<name>/ 폴더명에 사용
   type: whisper                      # whisper | sensevoice — 어댑터 분기 키
-  model_path: /data/FM/MODEL/whisper-small   # 백본 또는 학습 체크포인트 (.pt) 경로
-  backbone: openai/whisper-small     # processor 로드용 (학습 체크포인트 평가 시에도 유지)
+  model_path: /data/FM/MODEL/whisper/whisper-small   # 백본 또는 학습 체크포인트 경로
+  backbone: /data/FM/MODEL/whisper/whisper-small     # processor 로드용 (학습 체크포인트 평가 시에도 유지)
 
   options:                           # project.data.adapters.whisper.build_predict_fn 키워드 인자
     language: ko
@@ -20,7 +20,7 @@ recognizer:
     batch_size: 16
     device: cuda:0
 
-benchmarks:                          # BENCHMARK/<bench_id>/samples.jsonl 자동 lookup
+benchmarks:                          # BENCHMARK/data/<bench_id>/transcript.jsonl 자동 lookup
   - Sample10_PracticeRef
 
 batch_size: 16                       # evaluate_on_benchmark_suite 의 배치
