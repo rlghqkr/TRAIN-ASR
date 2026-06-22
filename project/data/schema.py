@@ -81,8 +81,13 @@ def _validate_one(d: dict[str, Any], *, line_no: int) -> Sample:
     """한 발화 dict 를 검증 + Sample 로 변환. 실패 시 SchemaValidationError."""
 
     # 필수 필드 누락
+    # text / text_norm 은 "" 허용 (잡음/이벤트만 있어 전사·정규화 결과가 없는 발화).
+    # key / audio / duration 은 키 존재 + 빈 값/None 불가.
     required = ("key", "audio", "duration", "text", "text_norm")
-    missing = [k for k in required if k not in d or d[k] in (None, "")]
+    missing = [
+        k for k in required
+        if k not in d or d[k] is None or (k not in ("text", "text_norm") and d[k] == "")
+    ]
     if missing:
         raise SchemaValidationError(
             f"[line {line_no}] 필수 필드 누락: {missing}"
@@ -101,11 +106,7 @@ def _validate_one(d: dict[str, Any], *, line_no: int) -> Sample:
             f"[line {line_no}] duration 범위 밖 ({_DUR_MIN} ~ {_DUR_MAX}): {dur}"
         )
 
-    # 텍스트 길이
-    if not str(d["text"]).strip():
-        raise SchemaValidationError(f"[line {line_no}] text 가 공백/빈 문자열")
-    if not str(d["text_norm"]).strip():
-        raise SchemaValidationError(f"[line {line_no}] text_norm 가 공백/빈 문자열")
+    # text / text_norm 은 "" 허용 (잡음 발화 등) — 길이 검사 안 함.
 
     # 선택 필드 값 검증
     gender = d.get("gender", "unknown")

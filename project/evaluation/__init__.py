@@ -68,14 +68,23 @@ def evaluate_on_benchmark_suite(
     per_benchmark_slice: dict[str, dict[str, dict[str, CerResult]]] = {}
     all_pred_samples: list[dict] = []
 
-    for bench_id, bench_path in benchmark_paths.items():
+    from tqdm.auto import tqdm
+
+    n_bench = len(benchmark_paths)
+    for bi, (bench_id, bench_path) in enumerate(benchmark_paths.items(), 1):
         samples = load_samples(bench_path)
         audios = [s.audio for s in samples]
         refs = [s.text_norm for s in samples]
 
-        # 배치 추론
+        # 배치 추론 (진행바: 벤치마크별 배치 진행)
         preds: list[str] = []
-        for i in range(0, len(audios), batch_size):
+        n_batches = (len(audios) + batch_size - 1) // batch_size
+        for i in tqdm(
+            range(0, len(audios), batch_size),
+            total=n_batches,
+            desc=f"[{bi}/{n_bench}] {bench_id} ({len(audios)} utts)",
+            unit="batch",
+        ):
             batch = audios[i:i + batch_size]
             preds.extend(predict_fn(batch))
 

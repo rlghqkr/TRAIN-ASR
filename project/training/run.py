@@ -107,7 +107,22 @@ def run_whisper_training(
     )
     log.info("Saved model + config", output_dir=str(output_dir))
 
+    log_history = trainer.state.log_history
+
+    # ── 6) GPU 메모리 해제 ───────────────────────────────────────────
+    # 노트북에서 호출 시 커널이 학습 후에도 GPU 를 계속 점유하지 않도록
+    # trainer(모델·옵티마이저 상태) 참조를 끊고 CUDA 캐시를 비운다.
+    import gc
+
+    import torch
+
+    del trainer
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    log.info("Released GPU memory")
+
     return {
         "output_dir": str(output_dir),
-        "log_history": trainer.state.log_history,
+        "log_history": log_history,
     }
