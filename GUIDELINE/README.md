@@ -12,14 +12,14 @@
 │  BENCHMARK/Benchmark_Meta_Table.xlsx        │  ← 벤치마크 초안 (오픈소스 + 커스텀)
 │              │                              │
 │              ▼                              │
-│  BENCHMARK/<bench_id>/{audio/, samples.jsonl}│
+│  BENCHMARK/<bench_id>/{audio/, transcript.jsonl}│
 │              │                              │
 │              ▼                              │
 │  백본 모델로 평가 → BENCHMARK/results/...    │
 └─────────────────────────────────────────────┘
 
 ┌─ 2단계 (TBD) ───────────────────────────────┐
-│  data/GOLD/{train,val}.jsonl                │  ← 학습 데이터
+│  data/SILVER/{train,val}.jsonl             │  ← 학습 데이터
 │              │                              │
 │              ▼                              │
 │  학습 → outputs/<exp>/model.pt              │
@@ -36,8 +36,8 @@
 | # | 문서 | 무엇 | 상태 |
 |---|---|---|---|
 | 1 | [1_벤치마크구축.md](1_벤치마크구축.md) | 평가용 벤치마크 한 개 만들고, 백본 모델로 평가 | **지금 작업** |
-| 2 | [2_모델학습.md](2_모델학습.md) | 학습 데이터로 모델 학습, 1단계 벤치마크에 평가 | **TBD** |
-| 📋 | [스키마.md](스키마.md) | 발화 JSONL · 평가 yaml · 코퍼스 메타 *공식 정의서* | 작업 중 *항상 참조* |
+| 2 | [2_모델학습.md](2_모델학습.md) | 모델 학습 (공통). 아키텍처별 → [Whisper](2_모델학습_whisper.md) / [SenseVoice](2_모델학습_sensevoice.md) | Whisper ✅ / SenseVoice 🚧 |
+| 📋 | [스키마.md](스키마.md) | 발화 JSONL · 평가 yaml *공식 정의서* | 작업 중 *항상 참조* |
 
 ---
 

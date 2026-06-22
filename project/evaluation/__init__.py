@@ -39,7 +39,7 @@ def evaluate_on_benchmark_suite(
     predict_fn: Callable[[list[str]], list[str]],
     benchmark_paths: dict[str, str | Path],
     out_dir: str | Path,
-    slice_fields: tuple[str, ...] = ("age_group", "gender", "corpus_id"),
+    slice_fields: tuple[str, ...] = ("age", "gender"),
     batch_size: int = 16,
     save_diff: bool = True,
 ) -> dict[str, CerResult]:
@@ -68,14 +68,23 @@ def evaluate_on_benchmark_suite(
     per_benchmark_slice: dict[str, dict[str, dict[str, CerResult]]] = {}
     all_pred_samples: list[dict] = []
 
-    for bench_id, bench_path in benchmark_paths.items():
+    from tqdm.auto import tqdm
+
+    n_bench = len(benchmark_paths)
+    for bi, (bench_id, bench_path) in enumerate(benchmark_paths.items(), 1):
         samples = load_samples(bench_path)
         audios = [s.audio for s in samples]
-        refs = [s.text_normalized for s in samples]
+        refs = [s.text_norm for s in samples]
 
-        # 배치 추론
+        # 배치 추론 (진행바: 벤치마크별 배치 진행)
         preds: list[str] = []
-        for i in range(0, len(audios), batch_size):
+        n_batches = (len(audios) + batch_size - 1) // batch_size
+        for i in tqdm(
+            range(0, len(audios), batch_size),
+            total=n_batches,
+            desc=f"[{bi}/{n_bench}] {bench_id} ({len(audios)} utts)",
+            unit="batch",
+        ):
             batch = audios[i:i + batch_size]
             preds.extend(predict_fn(batch))
 

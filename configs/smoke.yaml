@@ -1,0 +1,54 @@
+# 스모크 테스트 — 학습 파이프라인이 끝까지 도는지만 빠르게 확인.
+#
+# 변경점 (vs default.yaml):
+# - 데이터 소량(train 24 / val 6, Zeroth SILVER 변환본)
+# - epochs 1, batch 2, eval/save/log step 매우 짧게
+# - early_stopping 끔, wandb 끔 (로그인 불필요)
+#
+# 실행:
+#   CUDA_VISIBLE_DEVICES=2 conda run -n train-asr \
+#       python scripts/train.py --config configs/smoke.yaml --model whisper
+
+experiment:
+  name: smoke_test
+  seed: 42
+
+paths:
+  repo_root:   /home/cssong/workspace/TRAIN-ASR
+  train_jsonl: ${paths.repo_root}/data/SILVER/train.jsonl
+  val_jsonl:   ${paths.repo_root}/data/SILVER/val.jsonl
+  outputs_dir: ${paths.repo_root}/outputs
+
+models:
+  whisper:
+    backbone: /data/FM/MODEL/whisper/whisper-small
+    language: ko
+    task: transcribe
+
+data:
+  text_field:    text_norm
+  sample_rate:   16000
+  max_label_len: 200
+  num_workers:   2
+
+training:
+  epochs: 1
+  batch_size: 2
+  grad_accum_steps: 1
+  lr: 1.0e-5
+  warmup_steps: 0
+  weight_decay: 0.0
+  scheduler: constant
+  precision: bf16
+  grad_clip: 1.0
+  log_every: 1
+  eval_every: 5
+  save_every: 5
+  # early_stopping_patience 생략 → load_best_model 비활성 (스모크엔 불필요)
+
+wandb:
+  enabled: false
+
+runtime:
+  cuda_visible_devices: "2"
+  conda_env: train-asr

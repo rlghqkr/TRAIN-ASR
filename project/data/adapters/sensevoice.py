@@ -25,17 +25,17 @@ from typing import Iterable
 from project.data.schema import Sample
 
 
-# FunASR / 16kHz, hop=10ms → frames_per_sec = 100, source_len = duration_sec * 100
+# FunASR / 16kHz, hop=10ms → frames_per_sec = 100, source_len = duration * 100
 _FRAMES_PER_SEC_16KHZ = 100
 
 
-def to_sensevoice_dict(s: Sample, *, text_field: str = "text_normalized") -> dict:
+def to_sensevoice_dict(s: Sample, *, text_field: str = "text_norm") -> dict:
     """Sample → FunASR JSONL 한 줄 (dict)."""
-    target = s.text_normalized if text_field == "text_normalized" else s.text
+    target = s.text_norm if text_field == "text_norm" else s.text
     return {
         "key":            s.key,
         "source":         s.audio,
-        "source_len":     int(s.duration_sec * _FRAMES_PER_SEC_16KHZ),
+        "source_len":     int(s.duration * _FRAMES_PER_SEC_16KHZ),
         "target":         target,
         "target_len":     len(target.split()),
         "text_language":  "<|ko|>",
@@ -49,9 +49,9 @@ def to_sensevoice_jsonl(
     samples: Iterable[Sample],
     out_path: str | Path,
     *,
-    text_field: str = "text_normalized",
+    text_field: str = "text_norm",
 ) -> int:
-    """GOLD samples → FunASR JSONL 파일. 반환: 줄 수."""
+    """samples → FunASR JSONL 파일. 반환: 줄 수."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     n = 0

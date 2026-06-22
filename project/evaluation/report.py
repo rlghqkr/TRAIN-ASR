@@ -167,7 +167,7 @@ def write_diff_file(
     samples: Sequence[dict],
     out_path: str | Path,
     *,
-    ref_field: str = "text_normalized",
+    ref_field: str = "text_norm",
     hyp_field: str = "prediction_normalized",
     max_samples: int | None = None,
 ) -> Path:

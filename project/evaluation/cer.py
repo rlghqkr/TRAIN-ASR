@@ -103,16 +103,16 @@ def compute_cer(
 def slice_cer(
     samples: Sequence[dict],
     *,
-    ref_field: str = "text_normalized",
+    ref_field: str = "text_norm",
     hyp_field: str = "prediction_normalized",
     slice_field: str,
-    normalize: bool = False,    # 이미 *_normalized 라면 False
+    normalize: bool = False,    # 이미 정규화된 필드라면 False
 ) -> dict[str, CerResult]:
     """슬라이스(메타 필드 값별) CER.
 
     Args:
         samples: dict 리스트. 각 dict 는 ref_field, hyp_field, slice_field 보유.
-        slice_field: 'age_group', 'gender', 'corpus_id' 등.
+        slice_field: 'age', 'gender' 등.
 
     Returns:
         {slice_value: CerResult}
