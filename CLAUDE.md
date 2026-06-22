@@ -12,7 +12,7 @@
   벤치마크 평가
 - **연구 영역**: 한국어 음성인식 (ASR)
 - **메트릭**: CER (Character Error Rate) 우선, WER 보조
-- **데이터 단계**: 한 벤치마크 = 한 폴더 (`BENCHMARK/<bench_id>/{audio/, samples.jsonl}`). 스키마 정의는 [GUIDELINE/스키마.md](GUIDELINE/스키마.md)
+- **데이터 단계**: 한 벤치마크 = 한 폴더 (`BENCHMARK/data/<bench_id>/{audio/, transcript.jsonl}`). 스키마 정의는 [GUIDELINE/스키마.md](GUIDELINE/스키마.md)
 - **평가 단위**: 도메인(카페주문 / 콜센터 …) + 화자군(노인 / 어린이 …) + 환경(잡음 / 사투리 …) 별 벤치마크
 - **문서 인덱스**: [GUIDELINE/README.md](GUIDELINE/README.md)
 - **작업 가이드**: [GUIDELINE/1_벤치마크구축.md](GUIDELINE/1_벤치마크구축.md)
