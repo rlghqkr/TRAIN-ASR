@@ -12,7 +12,8 @@
 #   GPU=0 ENV=train-asr scripts/train.sh configs/smoke.yaml whisper   # 값 덮어쓰기
 #
 # 학습 후 자동 평가 (opt-in): EVAL_CONFIG 를 주면 학습 성공 시 그 평가 yaml 로
-# outputs/<exp> 를 벤치마크에 평가한다. STAGE 로 gold/silver 선택(기본 gold).
+# outputs/<exp> 를 벤치마크에 평가한다. (벤치 경로는 eval 기본값=GOLD 샘플셋,
+# 바꾸려면 BENCH_ROOT 환경변수)
 #   EVAL_CONFIG=BENCHMARK/configs/eval/whisper_baseline.yaml \
 #       scripts/train.sh configs/default.yaml whisper
 #
@@ -62,9 +63,9 @@ PY
     echo "[train→eval] experiment.name 을 못 읽어 평가 건너뜀" >&2
   else
     echo ""
-    echo "[train→eval] EVAL_CONFIG=$EVAL_CONFIG  exp=$EXP  stage=${STAGE:-gold}"
+    echo "[train→eval] EVAL_CONFIG=$EVAL_CONFIG  exp=$EXP"
     GPU="$GPU" ENV="$ENV" "$REPO_ROOT/scripts/eval.sh" "$EVAL_CONFIG" \
-      --model-path "outputs/$EXP" --name "$EXP" --stage "${STAGE:-gold}"
+      --model-path "outputs/$EXP" --name "$EXP" ${BENCH_ROOT:+--bench-root "$BENCH_ROOT"}
     rc=$?
   fi
 fi

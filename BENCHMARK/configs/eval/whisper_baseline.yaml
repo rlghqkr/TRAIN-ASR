@@ -21,7 +21,6 @@ recognizer:
     device: cuda:0
 
 benchmarks:                          # BENCHMARK/data/<bench_id>/transcript.jsonl 자동 lookup
-  - Sample10_PracticeRef
   - AIHub_CounselingSpeech
   - AIHub_FreeDialog_Senior
   - OpenSLR_SLR40_Zeroth_ko

@@ -8,11 +8,11 @@ BENCHMARK/results/<recognizer.name>/ 에 리포트를 쓴다.
 이 스크립트는 "config → predict_fn + benchmark_paths 조립 → 호출" 만 담당한다.
 
 사용법:
-    # 기본 (GOLD 경로에서 평가)
+    # 기본 (GOLD 샘플셋 경로에서 평가)
     python scripts/eval.py --config BENCHMARK/configs/eval/whisper_baseline.yaml
 
-    # SILVER 로 평가 (가끔)
-    python scripts/eval.py --config ... --stage silver
+    # 다른 데이터 경로로 (전량 SILVER 등)
+    python scripts/eval.py --config ... --bench-root /data/ASR/BENCHMARK/SILVER
 
     # 학습 직후 자동 평가 — 모델 경로/이름만 덮어쓰기 (train.sh 가 사용)
     python scripts/eval.py --config ... --model-path outputs/<exp> --name <exp>
@@ -34,8 +34,9 @@ from project.utils import load_config  # noqa: E402
 
 logger = structlog.get_logger()
 
-# 벤치마크 데이터 루트. <root>/<STAGE>/<bench_id>/transcript.jsonl
-DEFAULT_BENCH_ROOT = "/data/ASR/BENCHMARK"
+# 벤치마크 데이터 루트 (<root>/<bench_id>/transcript.jsonl). --bench-root 로 덮어쓰기.
+# 기본 = 샘플링된 평가셋(GOLD, 벤치마크당 수천 건). 전량은 /data/ASR/BENCHMARK/SILVER.
+DEFAULT_BENCH_DATA = "/data/ASR/BENCHMARK/SILVER/GOLD"
 TRANSCRIPT_NAME = "transcript.jsonl"
 
 
@@ -43,12 +44,9 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="ASR 벤치마크 평가")
     p.add_argument("--config", required=True,
                    help="평가 yaml (예: BENCHMARK/configs/eval/whisper_baseline.yaml)")
-    p.add_argument("--stage", choices=["gold", "silver"], default="gold",
-                   help="벤치마크 단계 경로 선택. 기본 gold. (가끔 silver)")
-    p.add_argument("--bench-root", default=None,
-                   help=f"벤치마크 루트 직접 지정(있으면 --stage 무시). "
-                        f"기본 {DEFAULT_BENCH_ROOT}/<STAGE>. "
-                        f"로컬 샘플은 BENCHMARK/data 지정.")
+    p.add_argument("--bench-root", default=DEFAULT_BENCH_DATA,
+                   help=f"벤치마크 데이터 루트. <root>/<bench_id>/transcript.jsonl. "
+                        f"기본 {DEFAULT_BENCH_DATA}. (전량은 /data/ASR/BENCHMARK/SILVER, 로컬 샘플은 BENCHMARK/data)")
     p.add_argument("--benchmarks", nargs="+", default=None,
                    help="평가할 bench_id 목록 (yaml benchmarks 덮어쓰기)")
     p.add_argument("--model-path", default=None,
@@ -76,22 +74,16 @@ def build_predict_fn(recognizer: dict):
     raise ValueError(f"알 수 없는 recognizer.type: {rtype!r} (whisper | sensevoice)")
 
 
-def resolve_benchmark_paths(bench_ids: list[str], *, stage: str,
-                            bench_root: str | None) -> dict[str, str]:
+def resolve_benchmark_paths(bench_ids: list[str], *, bench_root: str) -> dict[str, str]:
     """bench_id 목록 → {bench_id: transcript.jsonl 절대경로}. 없으면 Fail Fast."""
-    if bench_root is not None:
-        root = Path(bench_root)
-    else:
-        root = Path(DEFAULT_BENCH_ROOT) / stage.upper()
-
+    root = Path(bench_root)
     paths: dict[str, str] = {}
     for bid in bench_ids:
         p = root / bid / TRANSCRIPT_NAME
         if not p.exists():
             raise FileNotFoundError(
                 f"벤치마크 파일 없음: {p}\n"
-                f"  - --stage 를 바꾸거나(gold↔silver) --bench-root 로 경로를 지정하세요.\n"
-                f"  - 로컬 샘플이면: --bench-root {ROOT / 'BENCHMARK' / 'data'}"
+                f"  - --bench-root 경로 또는 벤치마크 ID 를 확인하세요."
             )
         paths[bid] = str(p)
     return paths
@@ -114,13 +106,11 @@ def main() -> None:
     bench_ids = args.benchmarks if args.benchmarks else cfg["benchmarks"]
     batch_size = cfg.get("batch_size", 16)
 
-    log = logger.bind(recognizer=name, type=recognizer["type"], stage=args.stage)
+    log = logger.bind(recognizer=name, type=recognizer["type"], bench_root=args.bench_root)
     log.info("Loaded eval config", config=args.config, n_benchmarks=len(bench_ids))
 
     # 1) 벤치마크 경로 해석 (Fail Fast)
-    benchmark_paths = resolve_benchmark_paths(
-        bench_ids, stage=args.stage, bench_root=args.bench_root,
-    )
+    benchmark_paths = resolve_benchmark_paths(bench_ids, bench_root=args.bench_root)
 
     # 2) predict_fn 조립
     predict_fn = build_predict_fn(recognizer)
@@ -143,7 +133,7 @@ def main() -> None:
 
     # 4) 요약 출력
     print("\n" + "=" * 60)
-    print(f"평가 완료 — {name}  (stage={args.stage})")
+    print(f"평가 완료 — {name}")
     print("-" * 60)
     print(f"{'benchmark':35s} {'CER%':>7} {'sCER%':>7} {'n':>6}")
     print("-" * 60)

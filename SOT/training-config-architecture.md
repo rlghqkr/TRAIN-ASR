@@ -103,7 +103,7 @@ batch_size:
 
 - `benchmarks` 는 **경로가 아니라 ID 리스트** (ID 기반 자동 lookup).
 - 읽는 곳: `scripts/eval.py`(CLI 진입점, `scripts/eval.sh` 가 호출), `notebooks/12_eval.ipynb`.
-- ID → `transcript.jsonl` 경로 해석: `--stage gold|silver`(기본 gold) 또는 `--bench-root` 로.
+- ID → `transcript.jsonl` 경로 해석: `--bench-root <루트>` (`<루트>/<bench_id>/transcript.jsonl`). 기본 = GOLD 샘플셋.
 
 ---
 
@@ -111,9 +111,9 @@ batch_size:
 
 - **학습셋**: `paths.train_jsonl` / `val_jsonl` 에 직접 지정. GOLD 든 SILVER 든
   사용자가 가리키는 경로를 그대로 읽는다 (GOLD 전용 강제 없음).
-- **평가셋**: `<bench_root>/<bench_id>/transcript.jsonl` (Sample 스키마).
-  - 기본 `bench_root` = `/data/ASR/BENCHMARK/<STAGE>` (STAGE = `gold`(기본) | `silver`).
-    GOLD 는 SILVER 에서 샘플링한 부분집합.
+- **평가셋**: `<bench_root>/<bench_id>/transcript.jsonl` (Sample 스키마). `--bench-root` 로 지정.
+  - 기본 `bench_root` = `/data/ASR/BENCHMARK/SILVER/GOLD` (샘플링된 평가셋, 벤치마크당 수천 건).
+    전량은 `/data/ASR/BENCHMARK/SILVER`. (참고: `/data/ASR/BENCHMARK/GOLD` 는 비어 있음 — 실제 GOLD 는 SILVER 아래)
   - `BENCHMARK/data/<bench_id>` 는 `/data/ASR/BENCHMARK/SILVER/<bench_id>/` 로의
     **심볼릭 링크**(+ 커밋된 로컬 샘플 `Sample10_PracticeRef`). `BENCHMARK/data/` 는 `.gitignore`.
 - 사용자 홈 절대경로(`/home/<user>/...`)를 **코드에 박지 않는다**. 경로는 config 로 뺀다.
@@ -146,7 +146,7 @@ scripts/train.sh configs/default.yaml sensevoice
 EVAL_CONFIG=BENCHMARK/configs/eval/whisper_baseline.yaml \
     scripts/train.sh configs/default.yaml whisper
 
-# 평가만 — 기본 GOLD (가끔 --stage silver)
+# 평가만 — 기본 GOLD 샘플셋 (다른 경로는 --bench-root)
 scripts/eval.sh BENCHMARK/configs/eval/whisper_baseline.yaml
 ```
 

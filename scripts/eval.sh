@@ -4,7 +4,7 @@
 #
 # 사용:
 #   scripts/eval.sh BENCHMARK/configs/eval/whisper_baseline.yaml          # GOLD 평가
-#   scripts/eval.sh BENCHMARK/configs/eval/whisper_baseline.yaml --stage silver
+#   scripts/eval.sh BENCHMARK/configs/eval/whisper_baseline.yaml --bench-root /data/ASR/BENCHMARK/SILVER
 #   GPU=2 scripts/eval.sh <config> --benchmarks Sample10_PracticeRef --bench-root BENCHMARK/data
 #
 # 첫 인자(평가 yaml) 뒤의 모든 옵션은 scripts/eval.py 로 그대로 전달된다.
