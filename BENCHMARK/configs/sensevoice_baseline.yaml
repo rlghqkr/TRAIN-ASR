@@ -1,0 +1,26 @@
+# SenseVoice 백본 평가 — 샘플 벤치마크
+#
+# 사용:
+#   scripts/eval.sh BENCHMARK/configs/sensevoice_baseline.yaml
+#
+# 새 yaml 추가 시: 본 파일 복사 → name / model_path / benchmarks 만 수정.
+
+# 평가 대상 모델
+recognizer:
+  name: sensevoice_small_baseline    # results/<name>/ 폴더명에 사용
+  type: sensevoice                   # whisper | sensevoice — 어댑터 분기 키
+  model_path: /data/FM/MODEL/SenseVoiceSmall   # FunASR 모델 폴더 (프로세서 포함)
+
+  options: {}                        # project.data.adapters.sensevoice.build_predict_fn 키워드 인자 (없으면 기본값)
+
+# 평가할 벤치마크 — BENCHMARK/data/<bench_id>/transcript.jsonl 자동 lookup
+benchmarks:
+  - Sample10_PracticeRef
+
+batch_size: 16                       # 평가 배치 (evaluate_on_benchmark_suite 가 predict_fn 에 넘기는 묶음 크기)
+sample_frac: 1.0                     # 벤치마크별 평가 비율. 1.0=전량, 0.1=10%만 빠르게(시드 고정). CLI --sample-frac 가 우선.
+
+# 런타임 — 런처(scripts/eval.sh)가 읽어서 실행
+runtime:
+  cuda_visible_devices: "0"          # 쓸 GPU 번호 (nvidia-smi 기준). 여러 개면 "0,1".
+  conda_env: train-asr               # conda 환경 (whisper·sensevoice 공용)

@@ -118,11 +118,20 @@ recognizer:
   name: <exp>_v1
   type: sensevoice
   model_path: outputs/<exp>      # ← 학습된 SenseVoice 체크포인트
-  options:
-    device: cuda:0               # 그 외 옵션은 FunASR 내부 처리
+  options: {}                    # 옵션 없음 (FunASR 내부 처리). GPU 는 runtime 으로
+
+benchmarks:
+  - Sample10_PracticeRef
+
+batch_size: 16
+sample_frac: 1.0
+
+runtime:
+  cuda_visible_devices: "0"      # GPU 번호 (nvidia-smi 기준)
+  conda_env: train-asr
 ```
 
-> Whisper 와 달리 `backbone` 별도 지정 불필요 (FunASR `AutoModel` 이 폴더에서 로드).
+> Whisper 와 달리 `backbone` 별도 지정 불필요 (FunASR `AutoModel` 이 폴더에서 로드). GPU 는 `runtime` 으로.
 
 ---
 

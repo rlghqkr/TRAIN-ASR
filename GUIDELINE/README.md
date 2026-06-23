@@ -48,7 +48,7 @@
 | 벤치마크 전처리 노트북 (템플릿) | [`../notebooks/00_build_benchmark.ipynb`](../notebooks/00_build_benchmark.ipynb) |
 | Whisper 학습 노트북 | [`../notebooks/11_train_whisper.ipynb`](../notebooks/11_train_whisper.ipynb) |
 | SenseVoice 학습 노트북 | [`../notebooks/10_train_sensevoice.ipynb`](../notebooks/10_train_sensevoice.ipynb) |
-| 평가 yaml 모음 | [`../BENCHMARK/configs/eval/`](../BENCHMARK/configs/eval/) |
+| 평가 yaml 모음 | [`../BENCHMARK/configs/`](../BENCHMARK/configs/) |
 | 학습 yaml 베이스 | [`../configs/default.yaml`](../configs/default.yaml) |
 | 코드 모듈 | `../project/` (`data/`, `evaluation/`, `training/`) |
 
