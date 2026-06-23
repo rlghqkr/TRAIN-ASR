@@ -14,7 +14,7 @@ experiment:
   seed: 42
 
 paths:
-  repo_root:   /home/cssong/workspace/TRAIN-ASR
+  repo_root:   .                                  # 저장소 루트 기준 상대경로 (런처가 루트로 cd 후 실행)
   train_jsonl: ${paths.repo_root}/data/SILVER/train.jsonl
   val_jsonl:   ${paths.repo_root}/data/SILVER/val.jsonl
   outputs_dir: ${paths.repo_root}/outputs

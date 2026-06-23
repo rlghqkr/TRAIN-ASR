@@ -14,7 +14,7 @@
 # 학습 후 자동 평가 (opt-in): EVAL_CONFIG 를 주면 학습 성공 시 그 평가 yaml 로
 # outputs/<exp> 를 벤치마크에 평가한다. (벤치 경로는 eval 기본값=GOLD 샘플셋,
 # 바꾸려면 BENCH_ROOT 환경변수)
-#   EVAL_CONFIG=BENCHMARK/configs/eval/whisper_baseline.yaml \
+#   EVAL_CONFIG=BENCHMARK/configs/whisper_baseline.yaml \
 #       scripts/train.sh configs/default.yaml whisper
 #
 # 우선순위: 환경변수(GPU/ENV) > config 의 runtime 값 > 기본값

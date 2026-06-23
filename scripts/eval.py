@@ -1,6 +1,6 @@
 """평가 진입점 (CLI).
 
-BENCHMARK/configs/eval/<name>.yaml 의 `recognizer` 로 모델을 로드하고,
+BENCHMARK/configs/<name>.yaml 의 `recognizer` 로 모델을 로드하고,
 `benchmarks` 목록을 GOLD(기본)/SILVER 경로에서 찾아 평가한 뒤
 BENCHMARK/results/<recognizer.name>/ 에 리포트를 쓴다.
 
@@ -9,10 +9,13 @@ BENCHMARK/results/<recognizer.name>/ 에 리포트를 쓴다.
 
 사용법:
     # 기본 (GOLD 샘플셋 경로에서 평가)
-    python scripts/eval.py --config BENCHMARK/configs/eval/whisper_baseline.yaml
+    python scripts/eval.py --config BENCHMARK/configs/whisper_baseline.yaml
 
     # 다른 데이터 경로로 (전량 SILVER 등)
     python scripts/eval.py --config ... --bench-root /data/ASR/BENCHMARK/SILVER
+
+    # 빠른 확인 — 벤치마크별 10% 만 (시드 고정, 재현 가능)
+    python scripts/eval.py --config ... --sample-frac 0.1
 
     # 학습 직후 자동 평가 — 모델 경로/이름만 덮어쓰기 (train.sh 가 사용)
     python scripts/eval.py --config ... --model-path outputs/<exp> --name <exp>
@@ -43,7 +46,7 @@ TRANSCRIPT_NAME = "transcript.jsonl"
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="ASR 벤치마크 평가")
     p.add_argument("--config", required=True,
-                   help="평가 yaml (예: BENCHMARK/configs/eval/whisper_baseline.yaml)")
+                   help="평가 yaml (예: BENCHMARK/configs/whisper_baseline.yaml)")
     p.add_argument("--bench-root", default=DEFAULT_BENCH_DATA,
                    help=f"벤치마크 데이터 루트. <root>/<bench_id>/transcript.jsonl. "
                         f"기본 {DEFAULT_BENCH_DATA}. (전량은 /data/ASR/BENCHMARK/SILVER, 로컬 샘플은 BENCHMARK/data)")
@@ -55,6 +58,10 @@ def parse_args() -> argparse.Namespace:
                    help="recognizer.name 덮어쓰기 (results/<name> 폴더)")
     p.add_argument("--no-timestamp", action="store_true",
                    help="결과 폴더명에 타임스탬프(__YYMMDD_HHMMSS) 안 붙임 (기본은 붙여 매 실행 따로 쌓음)")
+    p.add_argument("--sample-frac", type=float, default=None,
+                   help="벤치마크별 평가 샘플 비율. 1.0=전량, 0.1=10%%만 빠르게. "
+                        "시드 고정이라 같은 값이면 매번 같은 부분집합. "
+                        "미지정 시 yaml 의 sample_frac (없으면 1.0) 사용.")
     return p.parse_args()
 
 
@@ -66,7 +73,9 @@ def build_predict_fn(recognizer: dict):
 
     if rtype == "whisper":
         from project.data.adapters.whisper import build_predict_fn as _build
-        backbone = recognizer.get("backbone", model_path)
+        # backbone 은 .pt 가중치 평가 때만 필요. 폴더(백본/체크포인트) 평가면 None →
+        # 어댑터가 model_path 폴더에서 모델·프로세서를 함께 로드한다.
+        backbone = recognizer.get("backbone")
         return _build(model_path, backbone=backbone, **options)
     if rtype == "sensevoice":
         from project.data.adapters.sensevoice import build_predict_fn as _build
@@ -105,9 +114,12 @@ def main() -> None:
         name = f"{name}__{datetime.datetime.now().strftime('%y%m%d_%H%M%S')}"
     bench_ids = args.benchmarks if args.benchmarks else cfg["benchmarks"]
     batch_size = cfg.get("batch_size", 16)
+    # 샘플 비율 우선순위: CLI --sample-frac > yaml sample_frac > 1.0(전량)
+    sample_frac = args.sample_frac if args.sample_frac is not None else cfg.get("sample_frac", 1.0)
 
     log = logger.bind(recognizer=name, type=recognizer["type"], bench_root=args.bench_root)
-    log.info("Loaded eval config", config=args.config, n_benchmarks=len(bench_ids))
+    log.info("Loaded eval config", config=args.config, n_benchmarks=len(bench_ids),
+             sample_frac=sample_frac)
 
     # 1) 벤치마크 경로 해석 (Fail Fast)
     benchmark_paths = resolve_benchmark_paths(bench_ids, bench_root=args.bench_root)
@@ -129,11 +141,14 @@ def main() -> None:
         out_dir=out_dir,
         batch_size=batch_size,
         save_diff=True,
+        sample_frac=sample_frac,
     )
 
     # 4) 요약 출력
     print("\n" + "=" * 60)
     print(f"평가 완료 — {name}")
+    if sample_frac < 1.0:
+        print(f"(부분 샘플링: 벤치마크별 {sample_frac:.0%} 만 평가 — n 은 샘플 건수)")
     print("-" * 60)
     print(f"{'benchmark':35s} {'CER%':>7} {'sCER%':>7} {'n':>6}")
     print("-" * 60)

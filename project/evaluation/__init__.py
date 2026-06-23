@@ -42,6 +42,8 @@ def evaluate_on_benchmark_suite(
     slice_fields: tuple[str, ...] = ("age", "gender"),
     batch_size: int = 16,
     save_diff: bool = True,
+    sample_frac: float = 1.0,
+    sample_seed: int = 42,
 ) -> dict[str, CerResult]:
     """한 모델 × 여러 벤치마크 평가 → 리포트 일괄 생성.
 
@@ -54,12 +56,21 @@ def evaluate_on_benchmark_suite(
         slice_fields: 슬라이스 분해할 메타 필드.
         batch_size: predict_fn 호출 시 배치 크기.
         save_diff: True 면 <run>_diff.txt 생성.
+        sample_frac: 벤치마크별로 평가에 쓸 샘플 비율. 1.0=전량, 0.1=10%만.
+                     빠른 확인용. (0, 1] 범위. 시간 단축 ↔ CER 변동성 trade-off.
+        sample_seed: 부분 샘플링(sample_frac<1) 시 재현성용 시드. 같은 시드면 매번 같은 부분집합.
 
     Returns:
         {benchmark_id: CerResult}
     """
     from project.data import load_samples
-    import math
+    import random
+
+    # Fail Fast: 비율은 (0, 1] 범위만 허용
+    if not (0.0 < sample_frac <= 1.0):
+        raise ValueError(
+            f"sample_frac 은 (0, 1] 범위여야 합니다 (1.0=전량, 0.1=10%). 받은 값: {sample_frac}"
+        )
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -73,6 +84,15 @@ def evaluate_on_benchmark_suite(
     n_bench = len(benchmark_paths)
     for bi, (bench_id, bench_path) in enumerate(benchmark_paths.items(), 1):
         samples = load_samples(bench_path)
+
+        # 부분 샘플링: sample_frac<1 이면 시드 고정 무작위 부분집합만 평가.
+        # 정렬된 인덱스로 뽑아 원본 순서 유지 → 같은 시드면 항상 같은 부분집합(재현성).
+        if sample_frac < 1.0:
+            n_total = len(samples)
+            n_keep = max(1, round(n_total * sample_frac))
+            idx = sorted(random.Random(sample_seed).sample(range(n_total), n_keep))
+            samples = [samples[i] for i in idx]
+
         audios = [s.audio for s in samples]
         refs = [s.text_norm for s in samples]
 

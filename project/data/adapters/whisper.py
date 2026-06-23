@@ -108,7 +108,7 @@ def clean_whisper_output(text: str) -> str:
 def build_predict_fn(
     model_path: str | Path,
     *,
-    backbone: str = "openai/whisper-small",
+    backbone: str | None = None,
     language: str = "ko",
     task: str = "transcribe",
     device: str = "cuda:0",
@@ -117,30 +117,48 @@ def build_predict_fn(
 ):
     """Whisper 모델 로드 → predict_fn 반환 (evaluate 모듈 호환).
 
+    `model_path` 만으로 평가하는 게 기본이다. 학습 산출물(trainer.save_model)이든
+    원본 백본이든 HF 폴더는 모델·프로세서를 모두 담고 있으므로 폴더 하나면 충분하다.
+    `backbone` 은 가중치만 든 `.pt` 파일을 평가할 때(프로세서 출처가 없을 때)만 필요.
+
+    Args:
+        model_path: 평가할 모델. HF 폴더(원본 백본 or 학습 체크포인트) 또는 `.pt` 가중치 파일.
+        backbone: `.pt` 가중치 평가 시 프로세서/기본 아키텍처 출처. 폴더 평가 땐 불필요(None).
+        language / task: forced decoder language / task.
+        device: torch device. 런처(scripts/eval.sh)가 CUDA_VISIBLE_DEVICES 로 물리 GPU 를
+                마스킹하므로 보통 논리 'cuda:0' 그대로 둔다.
+
     Returns:
         Callable[[list[str]], list[str]] — 오디오 경로 → 텍스트.
+
+    Raises:
+        FileNotFoundError: model_path 가 폴더도 파일도 아닐 때.
+        ValueError: `.pt` 가중치인데 backbone 이 없을 때 (프로세서 출처 부재).
     """
     _require_infer_deps()
     import torch
     import soundfile as sf
     from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
-    processor = WhisperProcessor.from_pretrained(backbone, language=language, task=task)
-    model = WhisperForConditionalGeneration.from_pretrained(backbone)
-
     model_path = Path(model_path)
-    if model_path.is_file():
-        # 체크포인트 가중치 적용
+    if model_path.is_dir():
+        # self-contained HF 폴더 — 모델·프로세서 모두 여기서 로드 (백본/체크포인트 공통)
+        processor = WhisperProcessor.from_pretrained(model_path, language=language, task=task)
+        model = WhisperForConditionalGeneration.from_pretrained(model_path)
+    elif model_path.is_file():
+        # 가중치만 든 .pt — 프로세서/기본 아키텍처는 backbone 에서 가져와야 함
+        if not backbone:
+            raise ValueError(
+                f".pt 가중치 평가에는 backbone 이 필요합니다 (프로세서 출처). model_path={model_path}"
+            )
+        processor = WhisperProcessor.from_pretrained(backbone, language=language, task=task)
+        model = WhisperForConditionalGeneration.from_pretrained(backbone)
         state = torch.load(model_path, map_location="cpu")
-        # state_dict 가 dict 안에 또 dict 인 경우도 처리
-        if isinstance(state, dict) and "model" in state:
+        if isinstance(state, dict) and "model" in state:  # {"model": state_dict} 래핑 처리
             state = state["model"]
         model.load_state_dict(state, strict=False)
-    elif model_path.is_dir():
-        try:
-            model = WhisperForConditionalGeneration.from_pretrained(model_path)
-        except Exception:
-            pass
+    else:
+        raise FileNotFoundError(f"model_path 가 폴더도 파일도 아님: {model_path}")
 
     model.eval().to(device)
 

@@ -111,24 +111,32 @@ training:
 recognizer:
   name: <exp>_v1
   type: whisper
-  model_path: outputs/<exp>      # ← HF 디렉토리 (체크포인트 .pt 단일파일도 가능)
-  backbone: openai/whisper-small # processor 로드용 — 학습 때와 동일하게 유지
+  model_path: outputs/<exp>      # ← HF 디렉토리 (프로세서 포함 → backbone 불필요)
   options:
     language: ko
     task: transcribe
     beam_size: 5
-    batch_size: 16
-    device: cuda:0
+
+benchmarks:
+  - Sample10_PracticeRef
+
+batch_size: 16
+sample_frac: 1.0
+
+runtime:
+  cuda_visible_devices: "0"
+  conda_env: train-asr
 ```
 
-> `model_path` 가 **디렉토리**면 `from_pretrained` 으로, **단일 `.pt`** 면 가중치만 로드한다
-> ([`build_predict_fn`](../project/data/adapters/whisper.py)). `backbone` 은 항상 processor 용으로 유지.
+> `model_path` 가 **디렉토리**면 모델·프로세서를 모두 거기서 로드한다 (학습 결과는 프로세서 포함).
+> **단일 `.pt`** 가중치 파일일 때만 `backbone:` 을 추가해 processor/기본 아키텍처 출처를 지정한다
+> ([`build_predict_fn`](../project/data/adapters/whisper.py)).
 
 ---
 
 ## Whisper 특이 함정
 
-- **`backbone` 불일치** → 학습 때와 평가 때 backbone 이 다르면 processor/vocab 어긋남. 동일하게.
+- **`.pt` 평가 시 backbone 누락** → 가중치만 든 `.pt` 를 평가하면 `backbone` 으로 processor 출처를 줘야 함 (폴더 평가는 불필요).
 - **`predict_with_generate` 느림** → eval 스텝이 무거우면 `eval_every` 를 늘려 학습 throughput 확보.
 - **language/task 미지정** → 한국어인데 디코더가 영어로 새면 `models.whisper.language: ko` 확인.
 - **큰 LR** → 사전학습 능력 손상(catastrophic forgetting). 1e-6 ~ 5e-5 범위 유지.

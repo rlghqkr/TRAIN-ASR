@@ -1,0 +1,32 @@
+# 평가 스모크 테스트 — 평가 파이프라인이 끝까지 도는지만 빠르게 확인.
+#
+# 변경점 (vs whisper_baseline.yaml):
+# - 벤치마크 1개(Sample10_PracticeRef, 로컬 샘플 10건)만
+# - beam_size 1(그리디) + batch 작게 → 빠르게
+# - 그 외 recognizer 설정은 동일 (whisper-small)
+#
+# 실행 (Sample10_PracticeRef 는 GOLD 에 없고 BENCHMARK/data 에만 있으므로 --bench-root 필수):
+#   scripts/eval.sh BENCHMARK/configs/smoke.yaml --bench-root BENCHMARK/data
+
+# 평가 대상 모델
+recognizer:
+  name: smoke_test                     # results/<name>/ 폴더명에 사용
+  type: whisper                        # whisper | sensevoice — 어댑터 분기 키
+  model_path: /data/FM/MODEL/whisper/whisper-small   # HF 폴더(백본 또는 학습 체크포인트). 폴더면 프로세서까지 자동 로드.
+
+  options:                             # project.data.adapters.whisper.build_predict_fn 키워드 인자
+    language: ko
+    task: transcribe
+    beam_size: 1                       # 스모크엔 그리디(beam 1)로 빠르게
+
+# 평가할 벤치마크 — 로컬 샘플 (--bench-root BENCHMARK/data 와 함께 사용)
+benchmarks:
+  - Sample10_PracticeRef
+
+batch_size: 4                          # 평가 배치 (evaluate_on_benchmark_suite 가 predict_fn 에 넘기는 묶음 크기)
+sample_frac: 1.0                       # 벤치마크별 평가 비율. 1.0=전량, 0.1=10%만(시드 고정). CLI --sample-frac 가 우선.
+
+# 런타임 — 런처(scripts/eval.sh)가 읽어서 실행
+runtime:
+  cuda_visible_devices: "2"            # 쓸 GPU 번호 (nvidia-smi 기준). 여러 개면 "0,1".
+  conda_env: train-asr                 # conda 환경

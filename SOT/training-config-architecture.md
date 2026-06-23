@@ -11,7 +11,7 @@
 | 단계 | config 위치 | 소유 범위 |
 |------|-------------|-----------|
 | **학습** | `configs/default.yaml` | 학습셋 경로 + 모델 + 하이퍼파라미터 |
-| **평가** | `BENCHMARK/configs/eval/*.yaml` | 평가셋(benchmarks) + `recognizer.model_path` |
+| **평가** | `BENCHMARK/configs/*.yaml` | 평가셋(benchmarks) + `recognizer.model_path` |
 
 - 두 config 는 서로를 모른다. **유일한 연결 고리는 체크포인트 경로** —
   학습이 `outputs/<exp>/` 를 만들고, 평가 yaml 의 `recognizer.model_path` 가 그걸 가리킨다.
@@ -23,7 +23,7 @@
 ### 왜
 
 - 학습할 때 평가/전처리 노브가 같이 보이는 노이즈 제거.
-- 평가는 이미 `BENCHMARK/configs/eval/*.yaml` 이 self-contained 하게 소유 중
+- 평가는 이미 `BENCHMARK/configs/*.yaml` 이 self-contained 하게 소유 중
   (`notebooks/00_build_benchmark.ipynb` / `BENCHMARK/README.md §3` 이 읽음).
 - 학습/평가가 코드 레벨에선 이미 분리돼 있었고, config 만 한 덩어리였던 것을 정리.
 
@@ -88,7 +88,7 @@ runtime:           # cuda_visible_devices, conda_env
 
 ---
 
-## 3. `BENCHMARK/configs/eval/*.yaml` — 평가 전용 (유지)
+## 3. `BENCHMARK/configs/*.yaml` — 평가 전용 (유지)
 
 ```yaml
 recognizer:
@@ -143,11 +143,11 @@ scripts/train.sh configs/default.yaml whisper
 scripts/train.sh configs/default.yaml sensevoice
 
 # 학습 후 자동 평가 (opt-in): outputs/<exp> 를 그 평가 yaml 로 평가
-EVAL_CONFIG=BENCHMARK/configs/eval/whisper_baseline.yaml \
+EVAL_CONFIG=BENCHMARK/configs/whisper_baseline.yaml \
     scripts/train.sh configs/default.yaml whisper
 
 # 평가만 — 기본 GOLD 샘플셋 (다른 경로는 --bench-root)
-scripts/eval.sh BENCHMARK/configs/eval/whisper_baseline.yaml
+scripts/eval.sh BENCHMARK/configs/whisper_baseline.yaml
 ```
 
 - 학습 로직 SoT = `project/training/run.py`, 평가 진입점 = `scripts/eval.py`
