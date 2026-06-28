@@ -54,9 +54,12 @@ def run_whisper_training(
     text_field = data_cfg["text_field"]
     sample_rate = data_cfg["sample_rate"]
 
+    import random
+    seed = int(cfg["experiment"].get("seed", 42))
+
     paths = cfg["paths"]
     train_jsonl = paths["train_jsonl"]
-    val_jsonl = paths["val_jsonl"]
+    val_jsonl = paths.get("val_jsonl")     # data.val_split_ratio 로 자동분할 시엔 없어도 됨
 
     if run_name:
         os.environ.setdefault("WANDB_NAME", run_name)
@@ -66,23 +69,41 @@ def run_whisper_training(
     # 스키마 위반 행은 죽지 말고 건너뛰고 경고(skip_invalid) — 수십만 건 중 몇 줄 때문에
     # 긴 학습이 로드 단계에서 터지지 않게. (조용한 누락 아님: 건수/사유 경고 로그 남김)
     train_samples = load_samples(train_jsonl, skip_invalid=True)
-    val_samples = load_samples(val_jsonl, skip_invalid=True)
 
-    # 학습 데이터 부분 샘플링 (선택) — data.train_sample_frac < 1.0 이면 학습셋에서
-    # 시드(experiment.seed) 고정 무작위 부분집합만 학습한다. 큰 학습셋에서 빠른 실험/디버그용.
-    # 같은 시드면 항상 같은 부분집합(재현성). val 은 작아서 보통 전량 그대로 둔다.
+    # ── 순서 주의 ── (1) 풀 샘플링 → (2) 검증셋 분할.
+    # (1) 먼저 학습 풀을 부분 샘플링한다. data.train_sample_frac 은 "전체 중 얼마를 쓸지".
+    #     이 결과 풀에서 아래 (2) 검증셋을 떼므로, 자동 분할일 땐 frac 이 train+val 합계 기준이다.
+    #     예) 100건 + train_sample_frac=0.4 → 40건만 사용 → (2)에서 다시 train/val 로 나뉨.
+    #     (val_jsonl 을 따로 주면 그건 외부 파일이라 frac 영향 없음 — 풀 전체가 train 이 된다.)
     train_frac = float(data_cfg.get("train_sample_frac", 1.0))
     if not (0.0 < train_frac <= 1.0):
         raise ValueError(f"data.train_sample_frac 는 (0, 1] 범위여야 함: {train_frac}")
     if train_frac < 1.0:
-        import random
-        seed = int(cfg["experiment"].get("seed", 42))
         n_total = len(train_samples)
         n_keep = max(1, round(n_total * train_frac))
         idx = sorted(random.Random(seed).sample(range(n_total), n_keep))
         train_samples = [train_samples[i] for i in idx]
-        log.info("Subsampled train data", frac=train_frac,
+        log.info("Subsampled train pool", frac=train_frac,
                  n_kept=len(train_samples), n_total=n_total)
+
+    # (2) 검증셋 확보 — 기본은 자동 분할:
+    #   · paths.val_jsonl 을 주면 그 파일을 검증셋으로 사용 (명시 우선, 위 풀은 전부 train).
+    #   · 안 주면 위 풀에서 data.val_split_ratio(기본 0.02) 만큼 시드 고정으로 떼어 자동 분할.
+    val_split_ratio = float(data_cfg.get("val_split_ratio", 0.02))
+    if val_jsonl:
+        val_samples = load_samples(val_jsonl, skip_invalid=True)
+        log.info("Using explicit val_jsonl", path=val_jsonl)
+    else:
+        if not (0.0 < val_split_ratio < 1.0):
+            raise ValueError(
+                f"val_jsonl 미지정 시 data.val_split_ratio 는 (0, 1) 범위여야 함: {val_split_ratio}")
+        idx = list(range(len(train_samples)))
+        random.Random(seed).shuffle(idx)             # 시드 고정 → 매 실행 같은 분할(재현성)
+        n_val = max(1, round(len(train_samples) * val_split_ratio))
+        val_samples = [train_samples[i] for i in idx[:n_val]]
+        train_samples = [train_samples[i] for i in idx[n_val:]]   # train ∩ val = ∅ (누수 없음)
+        log.info("Auto train/val split", val_ratio=val_split_ratio,
+                 n_train=len(train_samples), n_val=len(val_samples), seed=seed)
 
     log.info("Loaded samples", n_train=len(train_samples), n_val=len(val_samples))
 
