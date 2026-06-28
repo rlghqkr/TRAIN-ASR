@@ -10,7 +10,9 @@ paths:
   # 학습/검증 JSONL (Sample 스키마 — project/data/schema.py).
   # silver/gold 어디든 직접 지정 가능. 예: ${paths.repo_root}/data/SILVER/....
   train_jsonl:         ${paths.repo_root}/data/SILVER/train.jsonl      # 학습용
-  val_jsonl:           ${paths.repo_root}/data/SILVER/val.jsonl        # 학습 중 모니터링용 (작은 분량)
+  # val_jsonl 은 선택. 주면 그 파일을 검증셋으로 쓰고, 생략하면 train 에서 자동 분할(기본).
+  # → 검증셋을 따로 관리하고 싶을 때만 아래 주석을 풀어 경로를 지정한다.
+  # val_jsonl:         ${paths.repo_root}/data/SILVER/val.jsonl        # (선택) 명시 검증셋
 
   # 학습 산출물
   outputs_dir:         ${paths.repo_root}/outputs                      # model / config.yaml / train.log
@@ -32,7 +34,10 @@ data:
   sample_rate:    16000             # 16kHz mono. SILVER 단계에서 통일된 표준.
   max_label_len:  200               # 텍스트 토큰 최대 길이
   num_workers:    4                 # DataLoader 워커 수. CPU 코어 수 / 메모리 봐서 조정.
-  train_sample_frac: 1.0            # <1.0 이면 학습셋에서 시드(experiment.seed) 고정 무작위 그만큼만 학습. 빠른 실험용. 1.0=전량.
+  # ↓ 적용 순서: train_sample_frac(전체 중 쓸 양) 먼저 → 그 사용분에서 val_split_ratio 로 val 분리.
+  #   예) 100건 + train_sample_frac=0.4 + val_split_ratio=0.5 → 40 사용 → train 20 / val 20.
+  train_sample_frac: 1.0            # 전체 학습 풀 중 실제 사용할 비율(시드 고정, 먼저 적용). <1.0=빠른 실험. 1.0=전량.
+  val_split_ratio: 0.02             # (자동분할) 위 사용 풀에서 val 로 뗄 비율(시드 고정). val_jsonl 을 주면 무시. 기본 2%.
 
 # 학습 하이퍼파라미터
 training:

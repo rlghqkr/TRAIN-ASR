@@ -1,12 +1,13 @@
 # 실험 01 — 고령 화자 적응 (Senior-Speaker Adaptation)
 #
 # 무엇을/왜 바꾸나 (vs configs/default.yaml):
-#   - 학습셋을 "age>=60 풀 + 일반 2:1 믹스" 로 교체 (docs/exp/01_노인발화_적응.md §1).
+#   - 학습셋을 "KsponSpeech(일반 베이스) + age>=60 고령 풀(+@)" 로 교체.
 #   - 백본 = whisper-small (주력). 레시피 확정 후 medium 으로 backbone 만 바꿔 재확인.
 #   - GPU 1 사용 — GPU 0 은 GOLD 베이스라인 평가가 점유 중.
 #
-# 선결조건: 아래 train_jsonl/val_jsonl 이 먼저 빌드돼 있어야 함 (필터+믹스).
-#   → "학습 실행" 절차는 docs/exp/01_노인발화_적응.md §학습 실행 참고.
+# 선결조건: train_jsonl 이 먼저 빌드돼 있어야 함 (고령 풀 + 일반 믹스).
+#   val 은 paths.val_jsonl 을 쓰거나, data.val_split_ratio 로 train 에서 자동 분할.
+#   → 실험 개요는 GUIDELINE/3_도메인적응_노인발화.md 참고.
 
 experiment:
   name: whisper_senior_adapt_v1      # outputs/<name>/ + W&B run name
@@ -14,9 +15,10 @@ experiment:
 
 paths:
   repo_root: .
-  # 실험별 학습/검증 JSONL (Sample 스키마). 절대경로로 /data/ASR/TRAIN 아래를 직접 가리킨다.
-  train_jsonl: /data/ASR/TRAIN/exp/senior_adapt_v1/train.jsonl   # age>=60 풀 + 일반 2:1
-  val_jsonl:   /data/ASR/TRAIN/exp/senior_adapt_v1/val.jsonl     # 고령+일반 혼합(망각 조기감지)
+  # 학습 JSONL (Sample 스키마). 절대경로로 /data/ASR/TRAIN 아래를 직접 가리킨다.
+  train_jsonl: /data/ASR/TRAIN/exp/senior_adapt_v1/train.jsonl   # KsponSpeech + age>=60 고령 풀(+@)
+  # val 은 생략 → train 에서 자동 분할(data.val_split_ratio). 따로 관리하려면 아래 주석 풀기:
+  # val_jsonl: /data/ASR/TRAIN/exp/senior_adapt_v1/val.jsonl
   outputs_dir: ${paths.repo_root}/outputs
 
 models:
@@ -26,10 +28,13 @@ models:
     task: transcribe
 
 data:
-  text_field: text_norm              # 평가와 일관되게 text_norm 학습
-  sample_rate: 16000
-  max_label_len: 200
-  num_workers: 8
+  text_field: text_norm              # 학습 타겟 필드. 평가(CER)와 일관되게 text_norm 권장.
+  sample_rate: 16000                 # 16kHz mono (SILVER 표준)
+  max_label_len: 200                 # 텍스트 토큰 최대 길이
+  num_workers: 8                     # DataLoader 워커 수
+  # 적용 순서: train_sample_frac(전체 중 쓸 양) 먼저 → 그 사용분에서 val_split_ratio 로 val 분리.
+  train_sample_frac: 1.0             # 전체 고령 풀 중 실제 사용할 비율(시드 고정, 먼저 적용). <1.0=빠른 탐색. 1.0=전량.
+  val_split_ratio: 0.02              # (자동분할) 위 사용 풀에서 val 로 뗄 비율(시드 고정). val_jsonl 주면 무시. 기본 2%.
 
 training:
   epochs: 3                          # 풀이 크므로 3 epoch 면 충분. early stopping 이 먼저 끊을 수 있음.
