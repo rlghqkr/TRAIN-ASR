@@ -1,0 +1,59 @@
+# 실험 01 — 고령 화자 적응 (Senior-Speaker Adaptation)
+#
+# 무엇을/왜 바꾸나 (vs configs/default.yaml):
+#   - 학습셋을 "age>=60 풀 + 일반 2:1 믹스" 로 교체 (docs/exp/01_노인발화_적응.md §1).
+#   - 백본 = whisper-small (주력). 레시피 확정 후 medium 으로 backbone 만 바꿔 재확인.
+#   - GPU 1 사용 — GPU 0 은 GOLD 베이스라인 평가가 점유 중.
+#
+# 선결조건: 아래 train_jsonl/val_jsonl 이 먼저 빌드돼 있어야 함 (필터+믹스).
+#   → "학습 실행" 절차는 docs/exp/01_노인발화_적응.md §학습 실행 참고.
+
+experiment:
+  name: whisper_senior_adapt_v1      # outputs/<name>/ + W&B run name
+  seed: 42
+
+paths:
+  repo_root: .
+  # 실험별 학습/검증 JSONL (Sample 스키마). 절대경로로 /data/ASR/TRAIN 아래를 직접 가리킨다.
+  train_jsonl: /data/ASR/TRAIN/exp/senior_adapt_v1/train.jsonl   # age>=60 풀 + 일반 2:1
+  val_jsonl:   /data/ASR/TRAIN/exp/senior_adapt_v1/val.jsonl     # 고령+일반 혼합(망각 조기감지)
+  outputs_dir: ${paths.repo_root}/outputs
+
+models:
+  whisper:
+    backbone: /data/FM/MODEL/whisper/whisper-small   # 주력. medium 재확인 시 이 줄만 교체.
+    language: ko
+    task: transcribe
+
+data:
+  text_field: text_norm              # 평가와 일관되게 text_norm 학습
+  sample_rate: 16000
+  max_label_len: 200
+  num_workers: 8
+
+training:
+  epochs: 3                          # 풀이 크므로 3 epoch 면 충분. early stopping 이 먼저 끊을 수 있음.
+  batch_size: 16                     # whisper-small + 96GB 여유. medium 이면 8 로.
+  grad_accum_steps: 2                # effective batch = 16 × 2 = 32
+  lr: 1.0e-5                         # 파인튜닝 적정. medium 이면 5.0e-6 권장(망각↓).
+  warmup_steps: 500
+  weight_decay: 0.01
+  scheduler: cosine
+  precision: bf16                    # A100/H100 → bf16 안전
+  grad_clip: 1.0
+  log_every: 25
+  eval_every: 1000                   # val(고령+일반)로 망각 모니터링
+  save_every: 1000
+  early_stopping_patience: 3
+
+wandb:
+  enabled: true
+  project: train-asr
+  entity: null
+  group: whisper
+  tags: [senior_adapt, rehearsal_2to1]
+  notes: "고령 화자 적응 v1 — age>=60 풀 + 일반 2:1 믹스, whisper-small"
+
+runtime:
+  cuda_visible_devices: "1"          # GPU 0 은 베이스라인 평가 점유 중 → 학습은 1번
+  conda_env: train-asr

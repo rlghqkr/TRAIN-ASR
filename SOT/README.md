@@ -13,3 +13,4 @@
 ## 문서
 
 - [training-config-architecture.md](training-config-architecture.md) — 학습/평가 config 분리 구조, config 키별 실제 사용처, 환경·데이터 경로 규약
+- [data-paths-and-preprocessing.md](data-paths-and-preprocessing.md) — RAW/벤치마크/학습 데이터 경로 + 전처리 과정(벤치마크 완료, 학습셋 TBD)

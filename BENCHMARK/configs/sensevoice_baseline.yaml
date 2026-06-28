@@ -17,7 +17,9 @@ recognizer:
 benchmarks:
   - Sample10_PracticeRef
 
-batch_size: 16                       # 평가 배치 (evaluate_on_benchmark_suite 가 predict_fn 에 넘기는 묶음 크기)
+# 평가 배치 — 바깥 청크(predict_fn 호출 묶음).
+# whisper 와 달리 SenseVoice 어댑터는 토큰 단위로 자체 배칭하므로 batch_size 의미가 다름(참고).
+batch_size: 16
 sample_frac: 1.0                     # 벤치마크별 평가 비율. 1.0=전량, 0.1=10%만 빠르게(시드 고정). CLI --sample-frac 가 우선.
 
 # 런타임 — 런처(scripts/eval.sh)가 읽어서 실행

@@ -16,7 +16,7 @@ from typing import Any
 import structlog
 import yaml
 
-from project.data import load_samples, validate_samples
+from project.data import load_samples
 
 
 logger = structlog.get_logger()
@@ -63,10 +63,26 @@ def run_whisper_training(
 
     # ── 1) 데이터 로드 + 검증 ────────────────────────────────────────
     # 학습/평가가 같은 스키마를 공유 (project/data/schema.py).
-    train_samples = load_samples(train_jsonl)
-    val_samples = load_samples(val_jsonl)
-    validate_samples(train_samples)
-    validate_samples(val_samples)
+    # 스키마 위반 행은 죽지 말고 건너뛰고 경고(skip_invalid) — 수십만 건 중 몇 줄 때문에
+    # 긴 학습이 로드 단계에서 터지지 않게. (조용한 누락 아님: 건수/사유 경고 로그 남김)
+    train_samples = load_samples(train_jsonl, skip_invalid=True)
+    val_samples = load_samples(val_jsonl, skip_invalid=True)
+
+    # 학습 데이터 부분 샘플링 (선택) — data.train_sample_frac < 1.0 이면 학습셋에서
+    # 시드(experiment.seed) 고정 무작위 부분집합만 학습한다. 큰 학습셋에서 빠른 실험/디버그용.
+    # 같은 시드면 항상 같은 부분집합(재현성). val 은 작아서 보통 전량 그대로 둔다.
+    train_frac = float(data_cfg.get("train_sample_frac", 1.0))
+    if not (0.0 < train_frac <= 1.0):
+        raise ValueError(f"data.train_sample_frac 는 (0, 1] 범위여야 함: {train_frac}")
+    if train_frac < 1.0:
+        import random
+        seed = int(cfg["experiment"].get("seed", 42))
+        n_total = len(train_samples)
+        n_keep = max(1, round(n_total * train_frac))
+        idx = sorted(random.Random(seed).sample(range(n_total), n_keep))
+        train_samples = [train_samples[i] for i in idx]
+        log.info("Subsampled train data", frac=train_frac,
+                 n_kept=len(train_samples), n_total=n_total)
 
     log.info("Loaded samples", n_train=len(train_samples), n_val=len(val_samples))
 

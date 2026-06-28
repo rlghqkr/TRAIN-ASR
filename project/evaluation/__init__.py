@@ -83,7 +83,9 @@ def evaluate_on_benchmark_suite(
 
     n_bench = len(benchmark_paths)
     for bi, (bench_id, bench_path) in enumerate(benchmark_paths.items(), 1):
-        samples = load_samples(bench_path)
+        # 평가는 벤치마크 데이터 몇 줄이 스키마 위반이어도 죽지 않게 건너뛴다(경고 로그 남김).
+        # 학습 경로(load_samples 기본값)는 그대로 Fail-Fast 유지.
+        samples = load_samples(bench_path, skip_invalid=True)
 
         # 부분 샘플링: sample_frac<1 이면 시드 고정 무작위 부분집합만 평가.
         # 정렬된 인덱스로 뽑아 원본 순서 유지 → 같은 시드면 항상 같은 부분집합(재현성).

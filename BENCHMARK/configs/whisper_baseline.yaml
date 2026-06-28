@@ -24,7 +24,11 @@ benchmarks:
   - AIHub_FreeDialog_Senior
   - OpenSLR_SLR40_Zeroth_ko
 
-batch_size: 16                       # 평가 배치 (evaluate_on_benchmark_suite 가 predict_fn 에 넘기는 묶음 크기)
+# 평가 배치 — 코드가 2단계로 받는다:
+#   ① recognizer.options.batch_size = 실제 GPU 배치 (여기선 미설정 → 어댑터 기본 16)
+#   ② 아래 batch_size = 바깥 청크(predict_fn 호출 묶음)
+# GPU 배치 키우려면 options 에 batch_size 를 추가하고 아래와 같은 값으로 맞춘다.
+batch_size: 16                       # 바깥 청크
 sample_frac: 1.0                     # 벤치마크별 평가 비율. 1.0=전량, 0.1=10%만 빠르게(시드 고정). CLI --sample-frac 가 우선.
 
 # 런타임 — 런처(scripts/eval.sh)가 읽어서 실행

@@ -32,6 +32,7 @@ data:
   sample_rate:    16000             # 16kHz mono. SILVER 단계에서 통일된 표준.
   max_label_len:  200               # 텍스트 토큰 최대 길이
   num_workers:    4                 # DataLoader 워커 수. CPU 코어 수 / 메모리 봐서 조정.
+  train_sample_frac: 1.0            # <1.0 이면 학습셋에서 시드(experiment.seed) 고정 무작위 그만큼만 학습. 빠른 실험용. 1.0=전량.
 
 # 학습 하이퍼파라미터
 training:

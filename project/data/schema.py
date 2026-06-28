@@ -19,9 +19,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
+
+# 스키마 모듈은 외부 의존 없이 stdlib 만 쓴다 → 경고도 stdlib logging 으로.
+_log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -36,8 +40,8 @@ class SchemaValidationError(ValueError):
 # ---------------------------------------------------------------------------
 _GENDER_VALUES = {"F", "M", "unknown"}
 
-# 발화 길이 허용 범위 (초)
-_DUR_MIN, _DUR_MAX = 0.1, 60.0
+# 발화 길이 허용 범위 (초). 하한 0.01s — 매우 짧은 발화(단음절 등)도 허용(Whisper 는 30s 패딩).
+_DUR_MIN, _DUR_MAX = 0.01, 60.0
 
 
 # ---------------------------------------------------------------------------
@@ -123,27 +127,46 @@ def _validate_one(d: dict[str, Any], *, line_no: int) -> Sample:
 # ---------------------------------------------------------------------------
 def validate_samples(
     samples: Iterable[Sample | dict[str, Any]],
+    *,
+    skip_invalid: bool = False,
 ) -> list[Sample]:
     """샘플 컬렉션 일괄 검증.
 
     Args:
         samples: Sample 객체 또는 dict 들의 iterable.
+        skip_invalid: False(기본)면 한 줄이라도 실패 시 즉시 raise (학습용 Fail Fast).
+            True 면 위반 행을 건너뛰고 경고 로그만 남긴다 (평가용 — 벤치마크 몇 줄
+            때문에 전체 평가가 죽는 걸 막음). 조용한 누락이 아니라 건수/사유를 로그로 남김.
 
     Returns:
         검증 통과한 Sample 리스트.
 
     Raises:
-        SchemaValidationError: 한 줄이라도 실패하면 즉시 (Fail Fast).
+        SchemaValidationError: skip_invalid=False 이고 한 줄이라도 실패하면 즉시 (Fail Fast).
     """
 
     out: list[Sample] = []
+    dropped: list[str] = []
     for i, s in enumerate(samples, 1):
         if isinstance(s, Sample):
             # 이미 Sample 이면 dict 로 변환해 같은 경로로 검증
             d = s.to_dict()
         else:
             d = dict(s)
-        out.append(_validate_one(d, line_no=i))
+        try:
+            out.append(_validate_one(d, line_no=i))
+        except SchemaValidationError as e:
+            if not skip_invalid:
+                raise
+            dropped.append(str(e))
+
+    if dropped:
+        _log.warning(
+            "스키마 위반 %d건 건너뜀 (skip_invalid=True): %s%s",
+            len(dropped),
+            " | ".join(dropped[:5]),
+            " ..." if len(dropped) > 5 else "",
+        )
 
     return out
 
@@ -151,12 +174,15 @@ def validate_samples(
 # ---------------------------------------------------------------------------
 # JSONL 입출력
 # ---------------------------------------------------------------------------
-def load_samples(path: str | Path, *, validate: bool = True) -> list[Sample]:
+def load_samples(
+    path: str | Path, *, validate: bool = True, skip_invalid: bool = False,
+) -> list[Sample]:
     """JSONL 파일 → list[Sample].
 
     Args:
         path: JSONL 경로.
         validate: True 면 검증 (기본).
+        skip_invalid: True 면 스키마 위반 행을 건너뛰고 경고만 (평가용). 기본 False(Fail Fast).
 
     Returns:
         Sample 리스트.
@@ -186,7 +212,7 @@ def load_samples(path: str | Path, *, validate: bool = True) -> list[Sample]:
 
     if not validate:
         return [Sample.from_dict(d) for d in raw]
-    return validate_samples(raw)
+    return validate_samples(raw, skip_invalid=skip_invalid)
 
 
 def save_samples(samples: Iterable[Sample], path: str | Path) -> int:

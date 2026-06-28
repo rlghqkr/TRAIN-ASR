@@ -1,0 +1,52 @@
+# Whisper-small 백본 zero-shot 베이스라인 — GOLD 전체 22개 벤치마크
+#
+# 사용:
+#   scripts/eval.sh BENCHMARK/configs/whisper_small_baseline.yaml --bench-root /data/ASR/BENCHMARK/GOLD
+#
+# 같은 GOLD 셋을 small/medium/large-v3 로 측정해 사이즈별 출발 CER 곡선을 본다 (docs/exp/README §2).
+
+recognizer:
+  name: whisper_small_baseline    # results/<name>__<timestamp>/ 폴더명
+  type: whisper                        # whisper | sensevoice
+  model_path: /data/FM/MODEL/whisper/whisper-small   # HF 폴더(백본). 프로세서까지 자동 로드.
+
+  options:                             # project.data.adapters.whisper.build_predict_fn 키워드 인자
+    language: ko
+    task: transcribe
+    beam_size: 1
+    # 배치는 코드가 2단계로 받는다(아래 top-level batch_size 와 한 쌍). 둘을 같은 값으로 맞춘다.
+    batch_size: 256                    # ★ 실제 GPU 배치 (이 값이 메모리를 결정). small(244M), 96GB 여유 → 크게.
+
+# 평가할 벤치마크 — <bench-root>/<bench_id>/transcript.jsonl 자동 lookup
+benchmarks:
+  - AIHub_CounselingSpeech
+  - AIHub_CustomerResponse
+  - AIHub_ForeignKorSpeech
+  - AIHub_FreeDialog_Child
+  - AIHub_FreeDialog_Senior
+  - AIHub_KO_ChildSpeech
+  - AIHub_KorLectureSpeech
+  - AIHub_KsponSpeech_Clean
+  - AIHub_KsponSpeech_Others
+  - AIHub_LowQualityPhoneVoice
+  - AIHub_MeetingASR
+  - AIHub_NoisyCommandSpeech
+  - AIHub_NoisyCommandSpeech_Denoise
+  - AIHub_TelemedicineSpeech
+  - AIHub_WelfareCounsel
+  - NIKL_Dialect_CC
+  - NIKL_Dialect_GG
+  - NIKL_Dialect_GS
+  - NIKL_Dialect_GW
+  - NIKL_Dialect_JJ
+  - NIKL_Dialect_JL
+  - OpenSLR_SLR40_Zeroth_ko
+
+# 바깥 청크(predict_fn 한 번에 넘기는 묶음). 위 options.batch_size 와 같은 값으로 맞춘다.
+# (작으면 안쪽 GPU 배치가 그만큼만 차서 손해. 배치 바꾸려면 위 options 와 여기 둘 다 같은 값으로.)
+batch_size: 256
+sample_frac: 1.0                       # 전량 평가
+
+runtime:
+  cuda_visible_devices: "0"            # 0번 GPU
+  conda_env: train-asr
