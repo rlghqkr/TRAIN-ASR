@@ -1,0 +1,59 @@
+# 실험 02 — 저음질 전화망 적응 (Narrowband Telephony Adaptation)
+#
+# 무엇을/왜 바꾸나 (vs configs/default.yaml):
+#   - 학습셋을 "전화채널 풀(LowQualityPhone+상담/복지 등) + 광대역 일반 2:1 믹스" 로 교체
+#     (docs/exp/02_저음질전화망_적응.md §1). 협대역 증강(16k→8k→16k) 섞기 옵션.
+#   - 백본 = whisper-small (주력). 확정 후 medium backbone 재확인.
+#   - GPU 1 사용 — GPU 0 은 GOLD 베이스라인 평가가 점유 중.
+#
+# 선결조건: 아래 train_jsonl/val_jsonl 이 먼저 빌드돼 있어야 함 (필터+믹스).
+#   → "학습 실행" 절차는 docs/exp/02_저음질전화망_적응.md §학습 실행 참고.
+
+experiment:
+  name: whisper_phone8k_adapt_v1
+  seed: 42
+
+paths:
+  repo_root: .
+  train_jsonl: /data/ASR/TRAIN/exp/phone8k_adapt_v1/train.jsonl   # 전화채널 풀 + 광대역 2:1
+  val_jsonl:   /data/ASR/TRAIN/exp/phone8k_adapt_v1/val.jsonl     # 전화+광대역 혼합
+  outputs_dir: ${paths.repo_root}/outputs
+
+models:
+  whisper:
+    backbone: /data/FM/MODEL/whisper/whisper-small
+    language: ko
+    task: transcribe
+
+data:
+  text_field: text_norm
+  sample_rate: 16000                 # 모델 입력은 16k. 전화 음원도 SILVER 에서 16k 로 업샘플된 상태.
+  max_label_len: 200
+  num_workers: 8
+
+training:
+  epochs: 3
+  batch_size: 16
+  grad_accum_steps: 2                # effective batch = 32
+  lr: 1.0e-5
+  warmup_steps: 500
+  weight_decay: 0.01
+  scheduler: cosine
+  precision: bf16
+  grad_clip: 1.0
+  log_every: 25
+  eval_every: 1000
+  save_every: 1000
+  early_stopping_patience: 3
+
+wandb:
+  enabled: true
+  project: train-asr
+  entity: null
+  group: whisper
+  tags: [phone8k_adapt, rehearsal_2to1, narrowband_aug]
+  notes: "저음질 전화망 적응 v1 — 전화채널 풀 + 광대역 2:1 믹스, whisper-small"
+
+runtime:
+  cuda_visible_devices: "1"
+  conda_env: train-asr
