@@ -8,11 +8,14 @@ paths:
   repo_root:           .                                   # 저장소 루트 기준 상대경로. 런처(scripts/train.sh)가 루트로 cd 후 실행.
 
   # 학습/검증 JSONL (Sample 스키마 — project/data/schema.py).
-  # silver/gold 어디든 직접 지정 가능. 예: ${paths.repo_root}/data/SILVER/....
-  train_jsonl:         ${paths.repo_root}/data/SILVER/train.jsonl      # 학습용
-  # val_jsonl 은 선택. 주면 그 파일을 검증셋으로 쓰고, 생략하면 train 에서 자동 분할(기본).
-  # → 검증셋을 따로 관리하고 싶을 때만 아래 주석을 풀어 경로를 지정한다.
-  # val_jsonl:         ${paths.repo_root}/data/SILVER/val.jsonl        # (선택) 명시 검증셋
+  # SILVER 의 데이터셋별 transcript.jsonl 을 **리스트로 골라** 직접 지정한다(GOLD concat 불필요).
+  # 단일 경로/글롭(`.../SILVER/*/transcript.jsonl`)도 허용. 여러 개면 순서대로 이어붙인다.
+  train_jsonl:                                                          # 기본 = 베이스라인 2종
+    - /data/ASR/TRAIN/SILVER/AIHub_KsponSpeech/transcript.jsonl
+    - /data/ASR/TRAIN/SILVER/OpenSLR_SLR40_Zeroth_ko/transcript.jsonl
+  # val_jsonl 은 선택. 주면 그 파일(들)을 검증셋으로, 생략하면 train 에서 자동 분할(기본).
+  # val_jsonl:
+  #   - /data/ASR/TRAIN/SILVER/.../transcript.jsonl                    # (선택) 명시 검증셋
 
   # 학습 산출물
   outputs_dir:         ${paths.repo_root}/outputs                      # model / config.yaml / train.log
