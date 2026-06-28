@@ -1,0 +1,76 @@
+# 베이스라인 학습 (Baseline) — 도메인 적응 비교 실험의 대조군.
+#
+# 실험 설계: "베이스라인만 학습한 모델" vs "베이스라인 + 도메인특화 학습한 모델" 의
+#            벤치마크 평가 결과를 비교한다. 이 config 는 그 중 **대조군(베이스라인)**.
+#
+# 무엇을/왜 (vs configs/default.yaml):
+#   - 학습셋 = 베이스라인 학습데이터 2개만: AIHub_KsponSpeech + OpenSLR_SLR40_Zeroth_ko.
+#     · GOLD 로 합치지 않고 SILVER 의 데이터셋별 transcript.jsonl 을 **리스트로 직접 지정**.
+#     · 도메인 실험은 이 리스트에 도메인특화 SILVER 2~3개를 추가하면 된다(아래 예시 주석).
+#   - val 은 train 에서 자동 분할(data.val_split_ratio). 시드 고정으로 train∩val=∅.
+#
+# 실행:
+#   CUDA_VISIBLE_DEVICES=0 conda run -n train-asr \
+#       python scripts/train.py --config configs/baseline.yaml --model whisper
+
+experiment:
+  name: whisper_baseline_v1          # outputs/<name>/ + W&B run name
+  seed: 42
+
+paths:
+  repo_root: .
+  # 학습 JSONL — SILVER 데이터셋별 transcript.jsonl 을 리스트로(GOLD concat 불필요).
+  # ★ 베이스라인 = 일반 한국어 2종만.
+  train_jsonl:
+    - /data/ASR/TRAIN/SILVER/AIHub_KsponSpeech/transcript.jsonl
+    - /data/ASR/TRAIN/SILVER/OpenSLR_SLR40_Zeroth_ko/transcript.jsonl
+  # (도메인 실험 예시 — 위 2개에 도메인특화 SILVER 를 추가):
+  #   - /data/ASR/TRAIN/SILVER/AIHub_FreeDialog_Senior/transcript.jsonl
+  #   - /data/ASR/TRAIN/SILVER/AIHub_LowQualityPhoneVoice/transcript.jsonl
+  #
+  # val 은 생략 → train 에서 자동 분할(data.val_split_ratio). 따로 관리하려면 주석 풀기:
+  # val_jsonl:
+  #   - /data/ASR/TRAIN/SILVER/.../transcript.jsonl
+  outputs_dir: ${paths.repo_root}/outputs
+
+models:
+  whisper:
+    backbone: /data/FM/MODEL/whisper/whisper-small   # 주력. medium 재확인 시 이 줄만 교체.
+    language: ko
+    task: transcribe
+
+data:
+  text_field: text_norm              # 학습 타겟 필드. 평가(CER)와 일관되게 text_norm.
+  sample_rate: 16000                 # 16kHz mono (SILVER 표준; 8kHz 는 로더가 리샘플)
+  max_label_len: 200                 # 텍스트 토큰 최대 길이
+  num_workers: 8                     # DataLoader 워커 수
+  # 적용 순서: train_sample_frac(전체 중 쓸 양) 먼저 → 그 사용분에서 val_split_ratio 로 val 분리.
+  train_sample_frac: 1.0             # 베이스라인 풀 전량 사용. <1.0 = 빠른 탐색.
+  val_split_ratio: 0.02              # (자동분할) 사용 풀에서 val 로 뗄 비율(시드 고정). val_jsonl 주면 무시.
+
+training:
+  epochs: 3                          # 풀이 크므로 3 epoch. early stopping 이 먼저 끊을 수 있음.
+  batch_size: 8
+  grad_accum_steps: 4                # effective batch = batch_size × grad_accum × num_gpus
+  lr: 1.0e-5
+  warmup_steps: 500
+  weight_decay: 0.01
+  scheduler: cosine
+  precision: bf16
+  grad_clip: 1.0
+  log_every: 25
+  eval_every: 1000
+  save_every: 1000
+  early_stopping_patience: 3
+
+wandb:
+  enabled: true
+  project: train-asr
+  entity: null
+  group: whisper
+  tags: [baseline]
+  notes: "베이스라인(Kspon+Zeroth)만 학습 — 도메인 적응 비교 대조군"
+
+runtime:
+  cuda_visible_devices: "0"          # 쓸 GPU 번호. 여러 개면 "0,1".
+  conda_env: train-asr

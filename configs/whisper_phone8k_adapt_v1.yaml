@@ -1,13 +1,14 @@
 # 실험 02 — 저음질 전화망 적응 (Narrowband Telephony Adaptation)
 #
-# 무엇을/왜 바꾸나 (vs configs/default.yaml):
-#   - 학습셋을 "KsponSpeech(일반 광대역 베이스) + 전화채널 풀(+@)" 로 교체.
-#     전화채널 = LowQualityPhone(8k) + 상담/복지 등. 협대역 증강(16k→8k→16k) 섞기 옵션.
+# 무엇을/왜 바꾸나 (vs configs/baseline.yaml):
+#   - 학습셋 = 베이스라인(Kspon+Zeroth) + 전화채널 도메인(LowQualityPhone ★ + Counseling + Welfare).
+#     SILVER 데이터셋별 transcript.jsonl 을 리스트로 직접 지정(GOLD/사전 믹스 불필요).
 #   - 백본 = whisper-small (주력). 확정 후 medium backbone 재확인.
-#   - GPU 1 사용 — GPU 0 은 GOLD 베이스라인 평가가 점유 중.
+#   - GPU 1 사용 — GPU 0 은 베이스라인 평가가 점유 중.
 #
-# 선결조건: train_jsonl 이 먼저 빌드돼 있어야 함 (전화채널 풀 + 광대역 믹스).
+# 선결조건: 아래 SILVER 데이터셋들이 빌드돼 있어야 함 (/data/ASR/TRAIN/SILVER/*/transcript.jsonl).
 #   val 은 paths.val_jsonl 을 쓰거나, data.val_split_ratio 로 train 에서 자동 분할.
+#   주의: 리스트는 데이터셋 **자연 크기 그대로 concat**(2:1 리허설 믹스·전화채널 필터 아님). 비율 조정은 별도.
 #   → 실험 개요는 GUIDELINE/3_도메인적응_저음질전화망.md 참고.
 
 experiment:
@@ -16,9 +17,16 @@ experiment:
 
 paths:
   repo_root: .
-  train_jsonl: /data/ASR/TRAIN/exp/phone8k_adapt_v1/train.jsonl   # KsponSpeech 광대역 + 전화채널 풀(+@)
+  # 학습 JSONL — SILVER 데이터셋별 transcript.jsonl 리스트 (베이스라인 + 전화채널 도메인).
+  train_jsonl:
+    - /data/ASR/TRAIN/SILVER/AIHub_KsponSpeech/transcript.jsonl        # 베이스라인(일반 광대역)
+    - /data/ASR/TRAIN/SILVER/OpenSLR_SLR40_Zeroth_ko/transcript.jsonl  # 베이스라인(가드)
+    - /data/ASR/TRAIN/SILVER/AIHub_LowQualityPhoneVoice/transcript.jsonl  # ★ 전화 주력(8k+wide)
+    - /data/ASR/TRAIN/SILVER/AIHub_CounselingSpeech/transcript.jsonl   # ○ 전화(상담)
+    - /data/ASR/TRAIN/SILVER/AIHub_WelfareCounsel/transcript.jsonl     # ○ 전화(복지상담)
   # val 은 생략 → train 에서 자동 분할(data.val_split_ratio). 따로 관리하려면 아래 주석 풀기:
-  # val_jsonl: /data/ASR/TRAIN/exp/phone8k_adapt_v1/val.jsonl
+  # val_jsonl:
+  #   - /data/ASR/TRAIN/SILVER/.../transcript.jsonl
   outputs_dir: ${paths.repo_root}/outputs
 
 models:

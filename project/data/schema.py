@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import glob as _glob
 import json
 import logging
 from dataclasses import asdict, dataclass
@@ -174,20 +175,35 @@ def validate_samples(
 # ---------------------------------------------------------------------------
 # JSONL 입출력
 # ---------------------------------------------------------------------------
-def load_samples(
-    path: str | Path, *, validate: bool = True, skip_invalid: bool = False,
-) -> list[Sample]:
-    """JSONL 파일 → list[Sample].
+_GLOB_CHARS = ("*", "?", "[")
 
-    Args:
-        path: JSONL 경로.
-        validate: True 면 검증 (기본).
-        skip_invalid: True 면 스키마 위반 행을 건너뛰고 경고만 (평가용). 기본 False(Fail Fast).
 
-    Returns:
-        Sample 리스트.
+def _expand_paths(paths: "str | Path | Iterable[str | Path]") -> list[Path]:
+    """경로 입력 → 실제 파일 경로 리스트 (글롭 확장, 입력 순서 보존).
+
+    - 단일 str/Path, 또는 그 iterable(YAML 리스트) 모두 허용.
+    - 글롭 문자(`* ? [`)가 있으면 확장(매칭 없으면 Fail Fast). 그 외는 그대로.
     """
+    entries: list = [paths] if isinstance(paths, (str, Path)) else list(paths)
+    out: list[Path] = []
+    for e in entries:
+        s = str(e)
+        if any(c in s for c in _GLOB_CHARS):
+            matched = sorted(_glob.glob(s))
+            if not matched:
+                raise SchemaValidationError(f"glob 매칭 파일 없음: {s}")
+            out.extend(Path(m) for m in matched)
+        else:
+            out.append(Path(e))
+    if not out:
+        raise SchemaValidationError("load_samples: 경로가 비어 있음")
+    return out
 
+
+def _load_one(
+    path: str | Path, *, validate: bool, skip_invalid: bool,
+) -> list[Sample]:
+    """단일 JSONL → list[Sample]. 상대 audio 경로는 이 파일 위치 기준으로 resolve."""
     p = Path(path).resolve()
     jsonl_dir = p.parent
 
@@ -213,6 +229,29 @@ def load_samples(
     if not validate:
         return [Sample.from_dict(d) for d in raw]
     return validate_samples(raw, skip_invalid=skip_invalid)
+
+
+def load_samples(
+    paths: "str | Path | Iterable[str | Path]",
+    *, validate: bool = True, skip_invalid: bool = False,
+) -> list[Sample]:
+    """JSONL 파일(들) → list[Sample].
+
+    학습은 SILVER 의 데이터셋별 `transcript.jsonl` 을 **리스트로 골라** 직접 읽는다(GOLD concat 불필요).
+    예) 베이스라인=[Kspon, Zeroth], 도메인=[Kspon, Zeroth, FreeDialog_Senior, ...].
+
+    Args:
+        paths: 단일 경로 | 경로 리스트(YAML 리스트) | 글롭 문자열(`*`). 여러 개면 **순서대로 이어붙임**.
+        validate: True 면 검증 (기본).
+        skip_invalid: True 면 스키마 위반 행을 건너뛰고 경고만 (평가용). 기본 False(Fail Fast).
+
+    Returns:
+        Sample 리스트 (입력 순서대로 concat).
+    """
+    out: list[Sample] = []
+    for p in _expand_paths(paths):
+        out.extend(_load_one(p, validate=validate, skip_invalid=skip_invalid))
+    return out
 
 
 def save_samples(samples: Iterable[Sample], path: str | Path) -> int:

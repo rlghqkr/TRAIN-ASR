@@ -1,12 +1,14 @@
 # 실험 01 — 고령 화자 적응 (Senior-Speaker Adaptation)
 #
-# 무엇을/왜 바꾸나 (vs configs/default.yaml):
-#   - 학습셋을 "KsponSpeech(일반 베이스) + age>=60 고령 풀(+@)" 로 교체.
+# 무엇을/왜 바꾸나 (vs configs/baseline.yaml):
+#   - 학습셋 = 베이스라인(Kspon+Zeroth) + 고령 도메인(FreeDialog_Senior ★ + WelfareCounsel ○).
+#     SILVER 데이터셋별 transcript.jsonl 을 리스트로 직접 지정(GOLD/사전 믹스 불필요).
 #   - 백본 = whisper-small (주력). 레시피 확정 후 medium 으로 backbone 만 바꿔 재확인.
-#   - GPU 1 사용 — GPU 0 은 GOLD 베이스라인 평가가 점유 중.
+#   - GPU 1 사용 — GPU 0 은 베이스라인 평가가 점유 중.
 #
-# 선결조건: train_jsonl 이 먼저 빌드돼 있어야 함 (고령 풀 + 일반 믹스).
+# 선결조건: 아래 SILVER 데이터셋들이 빌드돼 있어야 함 (/data/ASR/TRAIN/SILVER/*/transcript.jsonl).
 #   val 은 paths.val_jsonl 을 쓰거나, data.val_split_ratio 로 train 에서 자동 분할.
+#   주의: 리스트는 데이터셋 **자연 크기 그대로 concat**(2:1 리허설 믹스·age≥60 필터 아님). 비율 조정은 별도.
 #   → 실험 개요는 GUIDELINE/3_도메인적응_노인발화.md 참고.
 
 experiment:
@@ -15,10 +17,15 @@ experiment:
 
 paths:
   repo_root: .
-  # 학습 JSONL (Sample 스키마). 절대경로로 /data/ASR/TRAIN 아래를 직접 가리킨다.
-  train_jsonl: /data/ASR/TRAIN/exp/senior_adapt_v1/train.jsonl   # KsponSpeech + age>=60 고령 풀(+@)
+  # 학습 JSONL — SILVER 데이터셋별 transcript.jsonl 리스트 (베이스라인 + 고령 도메인).
+  train_jsonl:
+    - /data/ASR/TRAIN/SILVER/AIHub_KsponSpeech/transcript.jsonl        # 베이스라인(일반)
+    - /data/ASR/TRAIN/SILVER/OpenSLR_SLR40_Zeroth_ko/transcript.jsonl  # 베이스라인(가드)
+    - /data/ASR/TRAIN/SILVER/AIHub_FreeDialog_Senior/transcript.jsonl  # ★ 고령 주력(전량 60+)
+    - /data/ASR/TRAIN/SILVER/AIHub_WelfareCounsel/transcript.jsonl     # ○ 고령 보강(60대 33k 포함)
   # val 은 생략 → train 에서 자동 분할(data.val_split_ratio). 따로 관리하려면 아래 주석 풀기:
-  # val_jsonl: /data/ASR/TRAIN/exp/senior_adapt_v1/val.jsonl
+  # val_jsonl:
+  #   - /data/ASR/TRAIN/SILVER/.../transcript.jsonl
   outputs_dir: ${paths.repo_root}/outputs
 
 models:
