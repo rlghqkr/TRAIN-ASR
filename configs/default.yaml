@@ -36,7 +36,16 @@ data:
   text_field:     text_norm         # text | text_norm — 평가와 일관되게 text_norm 권장
   sample_rate:    16000             # 16kHz mono. SILVER 단계에서 통일된 표준.
   max_label_len:  200               # 텍스트 토큰 최대 길이
-  num_workers:    4                 # DataLoader 워커 수. CPU 코어 수 / 메모리 봐서 조정.
+  num_workers:    4                 # DataLoader 워커 수. CPU 코어 수 / 메모리 봐서 조정. (on_the_fly 면 8~16 권장)
+  # 피처 추출 모드 (학습 결과 동일 — 같은 결정적 피처):
+  #   precompute : log-mel 을 미리 다 추출해 디스크(Arrow)에 굽기. N epoch 재사용(계산 1회).
+  #                단 ~0.96MB/샘플 × 수십만 = 수백 GB + 사전계산 시간. cache_dir/num_proc 필요.
+  #   on_the_fly : 미리 안 굽고 학습 중 그때그때 추출(set_transform). 디스크 0, 30초패딩 낭비 0.
+  #                매 epoch 재계산(워커가 GPU 와 overlap → 보통 영향 작음). 대용량/디스크부족에 유리.
+  feature_mode:   precompute        # precompute | on_the_fly
+  # (precompute 전용) 피처 Arrow 캐시 위치(대용량 디스크 권장) + 사전계산 병렬 프로세스 수.
+  # feature_cache_dir: /feat/whisper_cache
+  # preproc_num_proc: 16
   # ↓ 적용 순서: train_sample_frac(전체 중 쓸 양) 먼저 → 그 사용분에서 val_split_ratio 로 val 분리.
   #   예) 100건 + train_sample_frac=0.4 + val_split_ratio=0.5 → 40 사용 → train 20 / val 20.
   train_sample_frac: 1.0            # 전체 학습 풀 중 실제 사용할 비율(시드 고정, 먼저 적용). <1.0=빠른 실험. 1.0=전량.

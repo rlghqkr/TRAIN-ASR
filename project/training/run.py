@@ -53,6 +53,11 @@ def run_whisper_training(
     data_cfg = cfg["data"]
     text_field = data_cfg["text_field"]
     sample_rate = data_cfg["sample_rate"]
+    # 피처 모드: precompute(미리 굽기, 기본) | on_the_fly(학습 중 추출, 디스크 0).
+    feature_mode = data_cfg.get("feature_mode", "precompute")
+    # 피처 사전계산 캐시 위치(대용량 디스크 권장) + 병렬 프로세스 수. (precompute 모드만 사용)
+    feature_cache_dir = data_cfg.get("feature_cache_dir")
+    preproc_num_proc = int(data_cfg.get("preproc_num_proc", 1))
 
     import random
     seed = int(cfg["experiment"].get("seed", 42))
@@ -115,6 +120,9 @@ def run_whisper_training(
         task=task,
         text_field=text_field,
         sampling_rate=sample_rate,
+        cache_dir=feature_cache_dir,
+        num_proc=preproc_num_proc,
+        feature_mode=feature_mode,
     )
     val_ds = to_whisper_dataset(
         val_samples,
@@ -123,6 +131,9 @@ def run_whisper_training(
         task=task,
         text_field=text_field,
         sampling_rate=sample_rate,
+        cache_dir=feature_cache_dir,
+        num_proc=preproc_num_proc,
+        feature_mode=feature_mode,
     )
 
     # ── 3) Trainer 빌드 ──────────────────────────────────────────────
