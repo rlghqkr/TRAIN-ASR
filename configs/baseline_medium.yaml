@@ -35,7 +35,7 @@ paths:
 
 models:
   whisper:
-    backbone: /data/FM/MODEL/whisper/whisper-small   # 주력. medium 재확인 시 이 줄만 교체.
+    backbone: /data/FM/MODEL/whisper/whisper-medium   # 주력. medium 재확인 시 이 줄만 교체.
     language: ko
     task: transcribe
 
@@ -44,15 +44,26 @@ data:
   sample_rate: 16000                 # 16kHz mono (SILVER 표준; 8kHz 는 로더가 리샘플)
   max_label_len: 200                 # 텍스트 토큰 최대 길이
   num_workers: 8                     # DataLoader 워커 수 (on_the_fly 면 8~16 권장)
-  feature_mode: on_the_fly           # 피처 미리 안 굽고 학습 중 추출(디스크 0·30초낭비 0). precompute 로 바꾸려면 default.yaml 참고.
+  feature_mode: on_the_fly           # 피처 미리 안 굽고 학습 중 추출(디스크 0·30초낭비 0·HDD 사전계산 없음).
+                                     # precompute 로 바꾸면 아래 cache_dir/num_proc 사용.
+  # ── (precompute 모드일 때만 사용) ──
+  # 피처 사전계산 — log-mel 을 미리 추출해 Arrow 캐시로 굽는다(학습 전 1회).
+  # 풀셋은 ~0.96MB/샘플(80×3000 float32) → 수백 GB(62만 건 ≈ 600GB)라 홈(/, 여유 295G)엔
+  # 못 담아 터진다. 반드시 대용량 디스크로 (이 서버는 /feat = NVMe 14TB 가 비어 있음).
+  feature_cache_dir: /feat/cache/TRAIN-ASR/hf_datasets
+  # 사전계산 병렬 프로세스 수. ★ 실측(2026-06-29): /data/ASR 가 단일 SATA HDD 라
+  # 8·16·32·48 모두 ~10-14 ex/s 로 평평(스케일링 없음). 시크 바운드라 높이면 오히려
+  # thrash. → 8 로 고정. (만약 오디오를 NVMe /feat 로 옮기면 CPU 바운드가 되어 32~64 가 유리)
+  preproc_num_proc: 8
   # 적용 순서: train_sample_frac(전체 중 쓸 양) 먼저 → 그 사용분에서 val_split_ratio 로 val 분리.
-  train_sample_frac: 1.0             # 베이스라인 풀 전량 사용. <1.0 = 빠른 탐색.
+  train_sample_frac: 0.25            # 첫 베이스라인용 부분샘플(~16만 건). HDD 사전계산 시간 단축.
+                                     # CER 확인 후 풀셋(1.0)으로 재학습. (frac 바뀌면 캐시 새로 굽힘)
   val_split_ratio: 0.02              # (자동분할) 사용 풀에서 val 로 뗄 비율(시드 고정). val_jsonl 주면 무시.
 
 training:
   epochs: 3                          # 풀이 크므로 3 epoch. early stopping 이 먼저 끊을 수 있음.
-  batch_size: 8
-  grad_accum_steps: 4                # effective batch = batch_size × grad_accum × num_gpus
+  batch_size: 32
+  grad_accum_steps: 1                # effective batch = batch_size × grad_accum × num_gpus
   lr: 1.0e-5
   warmup_steps: 500
   weight_decay: 0.01
@@ -73,5 +84,5 @@ wandb:
   notes: "베이스라인(Kspon+Zeroth)만 학습 — 도메인 적응 비교 대조군"
 
 runtime:
-  cuda_visible_devices: "0"          # 쓸 GPU 번호. 여러 개면 "0,1".
+  cuda_visible_devices: "1"          # 쓸 GPU 번호. 여러 개면 "0,1".
   conda_env: train-asr
