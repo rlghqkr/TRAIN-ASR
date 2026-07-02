@@ -1,0 +1,57 @@
+# Whisper-medium 원본 백본 zero-shot — GOLD 전체 22개 벤치마크
+# (학습 안 한 원본 백본 평가. 학습 베이스라인 대조군은 whisper_medium_baseline.yaml)
+#
+# 사용:
+#   scripts/eval.sh BENCHMARK/configs/whisper_medium_raw.yaml --bench-root /data/ASR/BENCHMARK/GOLD
+
+recognizer:
+  name: whisper_medium_raw
+  type: whisper
+  model_path: /data/FM/MODEL/whisper/whisper-medium
+
+  options:
+    language: ko
+    task: transcribe
+    beam_size: 1
+    # 배치는 코드가 2단계로 받는다(아래 top-level batch_size 와 한 쌍). 둘을 같은 값으로 맞춘다.
+    batch_size: 256                     # ★ 실제 GPU 배치 (이 값이 메모리를 결정). medium(769M), 96GB 여유.
+
+benchmarks:
+  - AIHub_KsponSpeech_Clean
+  - AIHub_KsponSpeech_Others
+  - OpenSLR_SLR40_Zeroth_ko
+  - kiosk_cafe_order
+
+# benchmarks:
+#   - AIHub_CounselingSpeech
+#   - AIHub_CustomerResponse
+#   - AIHub_ForeignKorSpeech
+#   - AIHub_FreeDialog_Child
+#   - AIHub_FreeDialog_Senior
+#   - AIHub_KO_ChildSpeech
+#   - AIHub_KorLectureSpeech
+#   - AIHub_KsponSpeech_Clean
+#   - AIHub_KsponSpeech_Others
+#   - AIHub_LowQualityPhoneVoice
+#   - AIHub_MeetingASR
+#   - AIHub_NoisyCommandSpeech
+#   - AIHub_NoisyCommandSpeech_Denoise
+#   - AIHub_TelemedicineSpeech
+#   - AIHub_WelfareCounsel
+#   - NIKL_Dialect_CC
+#   - NIKL_Dialect_GG
+#   - NIKL_Dialect_GS
+#   - NIKL_Dialect_GW
+#   - NIKL_Dialect_JJ
+#   - NIKL_Dialect_JL
+#   - OpenSLR_SLR40_Zeroth_ko
+#   - kiosk_cafe_order
+
+# 바깥 청크(predict_fn 한 번에 넘기는 묶음). 위 options.batch_size 와 같은 값으로 맞춘다.
+# (작으면 안쪽 GPU 배치가 그만큼만 차서 손해. 배치 바꾸려면 위 options 와 여기 둘 다 같은 값으로.)
+batch_size: 256
+sample_frac: 1.0
+
+runtime:
+  cuda_visible_devices: "0"
+  conda_env: train-asr
