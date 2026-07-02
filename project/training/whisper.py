@@ -95,6 +95,11 @@ def build_trainer(
         fp16=(tr.get("precision") == "fp16"),
         predict_with_generate=True,
         generation_max_length=cfg.get("data", {}).get("max_label_len", 200),
+        # on_the_fly(set_transform) 데이터셋은 컬럼이 raw [id, audio, text] 라, Trainer 기본값(True)이면
+        # 모델 forward 시그니처에 안 맞는다고 학습 전에 전부 제거 → 빈 데이터셋 에러. 커스텀 collator 가
+        # input_features/labels 를 직접 뽑으므로 컬럼 제거를 끈다. (precompute 모드에도 안전 — collator 가
+        # 필요한 키만 사용하고 id 같은 잔여 컬럼은 무시.)
+        remove_unused_columns=False,
         # CER 로 best 모델 선택 (낮을수록 좋음 → greater_is_better=False)
         load_best_model_at_end=load_best,
         metric_for_best_model="cer" if load_best else None,
