@@ -75,7 +75,8 @@ def build_trainer(
     training_args = Seq2SeqTrainingArguments(
         output_dir=str(output_dir),
         per_device_train_batch_size=tr["batch_size"],
-        per_device_eval_batch_size=tr["batch_size"],
+        # eval 은 토큰 생성(generate)이라 학습보다 메모리를 더 먹음 → 기본 학습의 절반(OOM 방지).
+        per_device_eval_batch_size=tr.get("eval_batch_size", max(1, tr["batch_size"] // 2)),
         gradient_accumulation_steps=tr.get("grad_accum_steps", 1),
         learning_rate=tr["lr"],
         lr_scheduler_type=tr.get("scheduler", "linear"),   # cosine | linear | constant
@@ -94,10 +95,19 @@ def build_trainer(
         fp16=(tr.get("precision") == "fp16"),
         predict_with_generate=True,
         generation_max_length=cfg.get("data", {}).get("max_label_len", 200),
+        # on_the_fly(set_transform) 데이터셋은 컬럼이 raw [id, audio, text] 라, Trainer 기본값(True)이면
+        # 모델 forward 시그니처에 안 맞는다고 학습 전에 전부 제거 → 빈 데이터셋 에러. 커스텀 collator 가
+        # input_features/labels 를 직접 뽑으므로 컬럼 제거를 끈다. (precompute 모드에도 안전 — collator 가
+        # 필요한 키만 사용하고 id 같은 잔여 컬럼은 무시.)
+        remove_unused_columns=False,
         # CER 로 best 모델 선택 (낮을수록 좋음 → greater_is_better=False)
         load_best_model_at_end=load_best,
         metric_for_best_model="cer" if load_best else None,
         greater_is_better=False if load_best else None,
+        # 재현성: config 의 experiment.seed 를 Trainer 에도 전달(dataloader 셔플·dropout 등).
+        # run.py 의 seed_everything 은 train/val 분할에만 쓰여 학습기엔 안 넘어가던 것을 보완.
+        seed=int(cfg["experiment"].get("seed", 42)),
+        data_seed=int(cfg["experiment"].get("seed", 42)),
         report_to=["wandb"] if cfg.get("wandb", {}).get("enabled") else [],
         run_name=cfg["experiment"]["name"],
     )
@@ -109,7 +119,7 @@ def build_trainer(
         if cfg["wandb"].get("group"):
             os.environ.setdefault("WANDB_RUN_GROUP", cfg["wandb"]["group"])
 
-    data_collator = _build_collator(processor)
+    data_collator = _build_collator(processor, model.config.decoder_start_token_id)
 
     callbacks = []
     if patience is not None:
@@ -156,13 +166,22 @@ def _build_compute_metrics(processor):
     return compute_metrics
 
 
-def _build_collator(processor):
-    """Whisper 학습용 data collator (input_features padding + label -100 masking)."""
+def _build_collator(processor, decoder_start_token_id: int):
+    """Whisper 학습용 data collator (input_features padding + label -100 masking).
+
+    Args:
+        decoder_start_token_id: 모델이 디코더 입력 맨 앞에 자동으로 붙이는 시작 토큰
+            (Whisper = `<|startoftranscript|>` = 50258). 토크나이저가 라벨 앞에 이 토큰을
+            넣어두므로 학습 라벨에서는 떼어내야 한다(Trainer 가 다시 붙임).
+            ※ `tokenizer.bos_token_id`(=50257, `<|endoftext|>`)와 **다르다**. bos 로 비교하면
+              50258≠50257 이라 영영 안 떼지고, 모델이 시작토큰을 먼저 출력하는 잘못된 버릇을 배운다.
+    """
     import torch
 
     class _Collator:
-        def __init__(self, processor):
+        def __init__(self, processor, decoder_start_token_id):
             self.processor = processor
+            self.decoder_start_token_id = decoder_start_token_id
 
         def __call__(self, features: list[dict]):
             input_features = [
@@ -178,10 +197,10 @@ def _build_collator(processor):
             labels = labels_batch["input_ids"].masked_fill(
                 labels_batch.attention_mask.ne(1), -100
             )
-            # decoder_start_token 이 labels 의 첫 토큰이면 제거 (Whisper 규약)
-            if (labels[:, 0] == self.processor.tokenizer.bos_token_id).all():
+            # 라벨 첫 토큰이 모델의 decoder_start_token 이면 제거 (Whisper 규약)
+            if (labels[:, 0] == self.decoder_start_token_id).all():
                 labels = labels[:, 1:]
             batch["labels"] = labels
             return batch
 
-    return _Collator(processor)
+    return _Collator(processor, decoder_start_token_id)

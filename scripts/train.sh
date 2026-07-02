@@ -45,11 +45,30 @@ PY
 GPU="${GPU:-$CFG_GPU}"
 ENV="${ENV:-$CFG_ENV}"
 
-echo "[train] config=$CONFIG  model=$MODEL  gpu=$GPU  env=$ENV"
+# GPU 개수 = cuda_visible_devices 의 콤마 구분 항목 수 ("0,1" → 2, "0" → 1).
+NGPU=$(awk -F',' '{print NF}' <<< "$GPU")
+
+echo "[train] config=$CONFIG  model=$MODEL  gpu=$GPU (n=$NGPU)  env=$ENV"
 echo "----------------------------------------------------------------"
 
-CUDA_VISIBLE_DEVICES="$GPU" conda run -n "$ENV" --no-capture-output \
-  python scripts/train.py --config "$CONFIG" --model "$MODEL"
+# Whisper 다중 GPU → DDP. 단일 GPU 거나 SenseVoice 면 기존대로 plain python.
+#  · 프로세스를 nproc_per_node 개 띄우고 RANK/LOCAL_RANK/WORLD_SIZE 를 세팅하면
+#    HF Trainer 가 자동으로 DDP + DistributedSampler 를 쓴다(글로벌 배치 = per_device × n_gpu).
+#    DataParallel(plain python 다중 GPU)과 달리 프로세스가 분리돼 GIL/GPU0 쏠림이 없어 ~선형 스케일.
+#  · --standalone: 단일 노드 rendezvous 를 빈 포트에 자동 구성 → 포트 충돌 없이 동시 학습 안전.
+#  · ★ `torchrun`(실행파일) 대신 `python -m torch.distributed.run` 으로 부른다. `torchrun` 콘솔
+#    스크립트는 PATH 상 ~/.local/bin 것(shebang=시스템 python 3.10, wandb 없음)이 먼저 잡혀
+#    워커가 env 밖 python 으로 떠 죽었다. `python -m …` 은 conda env 의 python(3.11)으로 확정되고
+#    워커도 그 sys.executable 로 떠 env(torch·wandb)를 그대로 쓴다.
+#  · SenseVoice 는 train.py 가 torchrun 명령을 출력하는 별도 흐름이라 여기선 plain python 유지.
+if [[ "$MODEL" == "whisper" && "$NGPU" -ge 2 ]]; then
+  CUDA_VISIBLE_DEVICES="$GPU" conda run -n "$ENV" --no-capture-output \
+    python -m torch.distributed.run --standalone --nproc_per_node="$NGPU" \
+      scripts/train.py --config "$CONFIG" --model "$MODEL"
+else
+  CUDA_VISIBLE_DEVICES="$GPU" conda run -n "$ENV" --no-capture-output \
+    python scripts/train.py --config "$CONFIG" --model "$MODEL"
+fi
 rc=$?
 
 # 학습 후 자동 평가 (EVAL_CONFIG 지정 시에만, 학습 성공 시에만)

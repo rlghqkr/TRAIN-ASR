@@ -110,16 +110,22 @@ def evaluate_on_benchmark_suite(
             batch = audios[i:i + batch_size]
             preds.extend(predict_fn(batch))
 
-        # 정규화 (모델 출력은 raw — normalize 거치고 비교)
+        # 정규화 — 정답·예측 **둘 다** 같은 규칙으로(구두점 제거 포함). text_norm 은 구두점을
+        # 유지하므로, 평가 시점에 정답도 정규화해야 정답·예측이 대칭이 되어 구두점이 오류로 잡히지
+        # 않는다(비대칭이면 정답의 `. , ?` 가 전부 삭제오류로 카운트되어 CER 이 부풀려짐).
+        refs_norm = [normalize_korean_asr(r) for r in refs]
         preds_norm = [normalize_korean_asr(p) for p in preds]
 
-        result = compute_cer(refs, preds_norm, normalize=False)
+        result = compute_cer(refs_norm, preds_norm, normalize=False)
         per_benchmark[bench_id] = result
 
-        # 슬라이스
+        # 슬라이스 — 본 CER 과 동일하게 정규화(구두점 제거)된 정답으로 비교(일관성).
+        # slice_cer 기본 ref_field 가 "text_norm" 이므로 그 값을 정규화본으로 덮어쓴다.
+        # (SILVER 원본은 안 건드림 — 이 dict 는 평가/리포트 전용)
         sample_dicts: list[dict] = []
-        for s, pred_raw, pred_norm in zip(samples, preds, preds_norm):
+        for s, pred_raw, pred_norm, ref_norm in zip(samples, preds, preds_norm, refs_norm):
             d = s.to_dict()
+            d["text_norm"] = ref_norm
             d["prediction_raw"] = pred_raw
             d["prediction_normalized"] = pred_norm
             d["benchmark_id"] = bench_id

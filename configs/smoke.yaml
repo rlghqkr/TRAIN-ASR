@@ -31,6 +31,7 @@ data:
   sample_rate:   16000               # 16kHz mono
   max_label_len: 200                 # 텍스트 토큰 최대 길이
   num_workers:   2                   # 스모크라 워커 적게
+  feature_mode:  on_the_fly          # 스모크도 on_the_fly (디스크 안 굽고 바로 추출)
   # 적용 순서: train_sample_frac(전체 중 쓸 양) 먼저 → 그 사용분에서 val_split_ratio 로 val 분리.
   train_sample_frac: 0.02            # Zeroth 22K 중 ~2%(~440건)만 — 스모크는 빠른 통과만 확인
   val_split_ratio: 0.2               # 소량(~24건)이라 20% 를 val 로 (자동 분할). val_jsonl 주면 무시.

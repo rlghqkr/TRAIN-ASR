@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Literal
 
 from project.data.schema import Sample
 
@@ -87,6 +87,96 @@ def _load_audio(path: str, target_sr: int, *, on_error: str = "raise"):
         return None  # on_error == "skip" → 호출부가 이 발화를 건너뜀
 
 
+def _whisper_feature_gen(
+    samples: list[Sample],
+    *,
+    backbone: str,
+    language: str,
+    task: str,
+    text_field: str,
+    sampling_rate: int,
+):
+    """log-mel 피처 + label 토큰을 산출하는 제너레이터 (사전계산용).
+
+    `Dataset.from_generator(..., num_proc=N)` 로 호출되면 datasets 가 `samples`
+    리스트를 N 개 샤드로 쪼개 각 워커 프로세스에서 이 함수를 돈다. 그래서
+    feature_extractor / tokenizer 는 **프로세스마다 새로 로드**한다(피클 회피 + 프로세스
+    독립). 모듈 최상위 함수라 datasets 가 안정적으로 fingerprint(캐시 키)를 계산할 수
+    있어, 같은 입력이면 캐시를 재사용한다.
+
+    깨진/누락 오디오는 학습에 무음을 섞지 않도록 그 발화를 건너뛴다
+    (경고는 _load_audio 가 남김).
+    """
+    from transformers import WhisperFeatureExtractor, WhisperTokenizer
+
+    feature_extractor = WhisperFeatureExtractor.from_pretrained(backbone)
+    tokenizer = WhisperTokenizer.from_pretrained(backbone, language=language, task=task)
+
+    for s in samples:
+        audio = _load_audio(s.audio, sampling_rate, on_error="skip")
+        if audio is None:
+            continue
+        text = s.text_norm if text_field == "text_norm" else s.text
+        features = feature_extractor(
+            audio, sampling_rate=sampling_rate, return_tensors="np",
+        ).input_features[0]
+        labels = tokenizer(text, return_tensors="np").input_ids[0]
+        yield {
+            "id": s.key,
+            "input_features": features,
+            "labels": labels,
+        }
+
+
+def _on_the_fly_dataset(
+    samples: list[Sample],
+    *,
+    backbone: str,
+    language: str,
+    task: str,
+    text_field: str,
+    sampling_rate: int,
+):
+    """메타데이터(오디오 경로 + 텍스트)만 가진 Dataset + `set_transform` — **on-the-fly** 모드.
+
+    피처를 디스크에 미리 굽지 않고 **collate 시점에 그때그때 추출**한다(DataLoader 워커가 GPU 와
+    overlap). precompute 와 학습 결과는 동일(같은 결정적 피처)하되:
+      - 디스크 저장 0 (precompute 의 ~600GB/30초패딩 낭비 없음), 느린 HDD 사전계산 단계 없음.
+      - 단 **매 epoch 피처를 재계산**(1 epoch 이면 총 계산량 precompute 와 동일). 워커가 GPU 와
+        겹쳐 학습속도 영향은 보통 작다(`data.num_workers` 8~16 권장).
+
+    주의(깨진 오디오): `set_transform` 은 row 를 못 버린다 → 깨진/누락 오디오는 **무음 대체(경고
+    로그)**. precompute 는 그 발화를 건너뛰지만 여기선 불가. SILVER 가 음원 존재를 검증하므로 깨진
+    건 드물다. 엄격히 배제하려면 매니페스트를 사전 필터링(별도).
+    """
+    import datasets as hfds
+    from transformers import WhisperFeatureExtractor, WhisperTokenizer
+
+    feature_extractor = WhisperFeatureExtractor.from_pretrained(backbone)
+    tokenizer = WhisperTokenizer.from_pretrained(backbone, language=language, task=task)
+
+    ds = hfds.Dataset.from_dict({
+        "id": [s.key for s in samples],
+        "audio": [s.audio for s in samples],
+        "text": [(s.text_norm if text_field == "text_norm" else s.text) for s in samples],
+    })
+
+    def _transform(batch: dict) -> dict:
+        feats, labs = [], []
+        for path, text in zip(batch["audio"], batch["text"]):
+            audio = _load_audio(path, sampling_rate, on_error="silence")  # 깨지면 무음(경고 로그)
+            feats.append(
+                feature_extractor(
+                    audio, sampling_rate=sampling_rate, return_tensors="np",
+                ).input_features[0]
+            )
+            labs.append(tokenizer(text, return_tensors="np").input_ids[0])
+        return {"id": batch["id"], "input_features": feats, "labels": labs}
+
+    ds.set_transform(_transform)
+    return ds
+
+
 def to_whisper_dataset(
     samples: Iterable[Sample],
     *,
@@ -96,8 +186,25 @@ def to_whisper_dataset(
     text_field: str = "text_norm",
     sampling_rate: int = 16000,
     cache_dir: str | Path | None = None,
+    num_proc: int = 1,
+    feature_mode: Literal["precompute", "on_the_fly"] = "precompute",
 ):
     """GOLD samples → HuggingFace Dataset (input_features + labels).
+
+    **모드 2종** (`feature_mode`, 학습 결과는 동일 — 같은 결정적 피처):
+      - `"precompute"`(기본): log-mel 을 **미리 다 추출해 Arrow 캐시로 굽는다**. 한 번 굽고 N epoch
+        재사용(계산 1회). 단 ~0.96MB/샘플 × 수십만 = 수백 GB 디스크 + 사전계산 시간(HDD 병목).
+        대용량은 `cache_dir`(대용량 디스크)·`num_proc`(병렬) 필수.
+      - `"on_the_fly"`: 미리 안 굽고 **학습 중 collate 시점에 추출**(`set_transform`). 디스크 0,
+        30초패딩 저장 낭비 없음. 매 epoch 재계산되나 DataLoader 워커가 GPU 와 overlap → 속도 영향
+        보통 작음(`data.num_workers` 8~16 권장). 대용량/디스크 부족에 유리. (깨진 오디오 처리 차이는
+        `_on_the_fly_dataset` 주석 참조.)
+
+    아래 설명은 `"precompute"` 기준. 수십만 건 풀셋은 피처가
+    ~0.96MB/샘플(80×3000 float32)이라 통째로 수백 GB 가 되므로:
+      - `cache_dir` 는 대용량 디스크를 가리켜야 한다(홈/`/` 는 못 담아 `No space left` 로 터짐).
+      - `num_proc` 로 병렬 추출한다(단일 프로세스는 수십만 건에 수 시간).
+    같은 samples + 인자면 fingerprint 가 같아 캐시를 재사용한다(재실행 시 재계산 안 함).
 
     Args:
         samples: GOLD Sample 리스트.
@@ -105,6 +212,9 @@ def to_whisper_dataset(
         language / task: forced decoder language / task.
         text_field: 'text' 또는 'text_norm'.
         sampling_rate: 16000 권장.
+        cache_dir: 피처 Arrow 캐시 위치. None 이면 datasets 기본(홈 캐시) — 풀셋엔 반드시
+            대용량 디스크 경로를 줄 것.
+        num_proc: 사전계산 병렬 프로세스 수. samples 수보다 크면 자동 보정.
 
     Returns:
         datasets.Dataset
@@ -112,35 +222,37 @@ def to_whisper_dataset(
     _require_train_deps()
 
     import datasets as hfds
-    from transformers import WhisperFeatureExtractor, WhisperTokenizer
 
     sample_list = list(samples)
     if not sample_list:
         raise ValueError("samples 가 비어 있음")
 
-    feature_extractor = WhisperFeatureExtractor.from_pretrained(backbone)
-    tokenizer = WhisperTokenizer.from_pretrained(
-        backbone, language=language, task=task,
+    if feature_mode == "on_the_fly":
+        return _on_the_fly_dataset(
+            sample_list, backbone=backbone, language=language, task=task,
+            text_field=text_field, sampling_rate=sampling_rate,
+        )
+    if feature_mode != "precompute":
+        raise ValueError(
+            f"feature_mode 는 'precompute' | 'on_the_fly' 여야 함 (받음: {feature_mode!r})"
+        )
+
+    # num_proc 가 샘플 수보다 크면 빈 샤드가 생겨 datasets 가 에러 → 상한 보정.
+    n_proc = max(1, min(int(num_proc), len(sample_list)))
+
+    return hfds.Dataset.from_generator(
+        _whisper_feature_gen,
+        gen_kwargs={
+            "samples": sample_list,          # list → datasets 가 num_proc 샤드로 분할
+            "backbone": backbone,
+            "language": language,
+            "task": task,
+            "text_field": text_field,
+            "sampling_rate": sampling_rate,
+        },
+        num_proc=n_proc,
+        cache_dir=str(cache_dir) if cache_dir else None,
     )
-
-    def gen():
-        for s in sample_list:
-            # 학습은 깨진 오디오를 무음으로 때우면 안 됨 → 그 발화 자체를 건너뜀(경고는 _load_audio 가 남김).
-            audio = _load_audio(s.audio, sampling_rate, on_error="skip")
-            if audio is None:
-                continue
-            text = s.text_norm if text_field == "text_norm" else s.text
-            features = feature_extractor(
-                audio, sampling_rate=sampling_rate, return_tensors="np",
-            ).input_features[0]
-            labels = tokenizer(text, return_tensors="np").input_ids[0]
-            yield {
-                "id": s.key,
-                "input_features": features,
-                "labels": labels,
-            }
-
-    return hfds.Dataset.from_generator(gen)
 
 
 # ─── 추론 출력 후처리 ────────────────────────────────────────────
@@ -208,8 +320,10 @@ def build_predict_fn(
         raise FileNotFoundError(f"model_path 가 폴더도 파일도 아님: {model_path}")
 
     model.eval().to(device)
-
-    forced_ids = processor.get_decoder_prompt_ids(language=language, task=task)
+    # 평가도 학습부(build_trainer)와 동일하게 generate(language=, task=) 로 디코더 프롬프트를 강제한다.
+    # 구 forced_decoder_ids 방식은 deprecated 이고 학습 설정과 불일치 → 언어/태스크 강제가 조용히
+    # 새면 CER 이 실제보다 나쁘게 나온다. 모델에 박힌 forced_decoder_ids 는 비워 충돌 방지.
+    model.generation_config.forced_decoder_ids = None
 
     def predict(audio_paths: list[str]) -> list[str]:
         out: list[str] = []
@@ -226,7 +340,8 @@ def build_predict_fn(
                 # fp32 모델이면 no-op.
                 ids = model.generate(
                     inputs.input_features.to(model.dtype),
-                    forced_decoder_ids=forced_ids,
+                    language=language,
+                    task=task,
                     num_beams=beam_size,
                     max_new_tokens=200,
                 )

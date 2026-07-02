@@ -11,6 +11,14 @@ project/training/run.py 에 있고, 노트북도 같은 함수를 호출한다(S
     python scripts/train.py --config configs/default.yaml --model sensevoice
 """
 
+import os
+
+# 오디오 변환(feature extraction)이 PyTorch intra-op 으로 192 코어를 다 잡아 서버 load 폭주 +
+# 같은 서버 이웃에게 민폐 (실제 병목은 디스크라 변환 속도엔 영향 없음). torch/numpy import 전에
+# 스레드 풀을 제한해 코어 독식을 막는다(dataloader 워커도 이 환경을 상속). 명시 지정 시 그걸 존중.
+for _v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
 import argparse
 import sys
 from pathlib import Path
