@@ -1,0 +1,26 @@
+# Whisper-small 백본 평가 — AIHub_KsponSpeech eval셋 (SILVER 직접 입력)
+#
+# 사용:
+#   python scripts/eval_silver.py --config BENCHMARK/configs/eval/whisper_small_kspon.yaml
+#
+# NOTE: benchmarks 가 "ID: SILVER 경로" 매핑인 점이 기존 eval yaml 과 다름.
+#   eval_silver.py 가 필드명 매핑 변환본을 만들어 평가함 (원본 SILVER 불변).
+
+recognizer:
+  name: whisper_small_kspon
+  type: whisper
+  model_path: openai/whisper-small   # 서버 실제 경로 확인 후 조정
+  backbone: openai/whisper-small     # processor 로드용 (model_path 와 동일 폴더)
+
+  options:                                   # project.data.adapters.whisper.build_predict_fn 키워드 인자
+    language: ko
+    task: transcribe
+    beam_size: 5
+    batch_size: 16
+    device: cuda:2
+
+benchmarks:                                  # 벤치마크ID: SILVER transcript.jsonl 경로
+  AIHub_KsponSpeech_general_clean: /data/ASR/BENCHMARK/SILVER/AIHub_KsponSpeech/KsponSpeech_eval/eval_clean/transcript.jsonl
+  AIHub_KsponSpeech_general_other: /data/ASR/BENCHMARK/SILVER/AIHub_KsponSpeech/KsponSpeech_eval/eval_other/transcript.jsonl
+
+batch_size: 16                               # evaluate_on_benchmark_suite 의 배치

@@ -12,7 +12,7 @@
 #   → 실험 개요는 GUIDELINE/3_도메인적응_저음질전화망.md 참고.
 
 experiment:
-  name: whisper_phone8k_adapt_v1
+  name: whisper_phone8k_frac10
   seed: 42
 
 paths:
@@ -21,9 +21,9 @@ paths:
   train_jsonl:
     - /data/ASR/TRAIN/SILVER/AIHub_KsponSpeech/transcript.jsonl        # 베이스라인(일반 광대역)
     - /data/ASR/TRAIN/SILVER/OpenSLR_SLR40_Zeroth_ko/transcript.jsonl  # 베이스라인(가드)
-    - /data/ASR/TRAIN/SILVER/AIHub_LowQualityPhoneVoice/transcript.jsonl  # ★ 전화 주력(8k+wide)
-    - /data/ASR/TRAIN/SILVER/AIHub_CounselingSpeech/transcript.jsonl   # ○ 전화(상담)
-    - /data/ASR/TRAIN/SILVER/AIHub_WelfareCounsel/transcript.jsonl     # ○ 전화(복지상담)
+    - /data/ASR/_train_sample_kiho/AIHub_LowQualityPhoneVoice/transcript.jsonl  # ★ 전화 주력(8k+wide)
+    - /data/ASR/_train_sample_kiho/AIHub_CounselingSpeech/transcript.jsonl   # ○ 전화(상담)
+    - /data/ASR/_train_sample_kiho/AIHub_WelfareCounsel/transcript.jsonl     # ○ 전화(복지상담)
   # val 은 생략 → train 에서 자동 분할(data.val_split_ratio). 따로 관리하려면 아래 주석 풀기:
   # val_jsonl:
   #   - /data/ASR/TRAIN/SILVER/.../transcript.jsonl
@@ -43,12 +43,12 @@ data:
   feature_mode: on_the_fly           # 피처 미리 안 굽고 학습 중 추출(디스크 0·30초낭비 0). precompute 로 바꾸려면 default.yaml 참고.
   # 적용 순서: train_sample_frac(전체 중 쓸 양) 먼저 → 그 사용분에서 val_split_ratio 로 val 분리.
   train_sample_frac: 1.0             # 전체 전화채널 풀 중 실제 사용할 비율(시드 고정, 먼저 적용). <1.0=빠른 탐색. 1.0=전량.
-  val_split_ratio: 0.02              # (자동분할) 위 사용 풀에서 val 로 뗄 비율(시드 고정). val_jsonl 주면 무시. 기본 2%.
+  val_split_ratio: 0.005              # (자동분할) 위 사용 풀에서 val 로 뗄 비율(시드 고정). val_jsonl 주면 무시. 기본 2%.
 
 training:
   epochs: 3
-  batch_size: 16
-  grad_accum_steps: 2                # effective batch = 32
+  batch_size: 32
+  grad_accum_steps: 1                # effective batch = 32
   lr: 1.0e-5
   warmup_steps: 500
   weight_decay: 0.01
@@ -56,8 +56,8 @@ training:
   precision: bf16
   grad_clip: 1.0
   log_every: 25
-  eval_every: 1000
-  save_every: 1000
+  eval_every: 5000
+  save_every: 5000
   early_stopping_patience: 3
 
 wandb:
@@ -70,4 +70,4 @@ wandb:
 
 runtime:
   cuda_visible_devices: "1"
-  conda_env: train-asr
+  conda_env: TRAIN-ASR

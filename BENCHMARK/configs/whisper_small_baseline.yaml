@@ -48,5 +48,5 @@ batch_size: 256
 sample_frac: 1.0                       # 전량 평가
 
 runtime:
-  cuda_visible_devices: "0"            # 0번 GPU
+  cuda_visible_devices: "1"            # 0번 GPU
   conda_env: train-asr
